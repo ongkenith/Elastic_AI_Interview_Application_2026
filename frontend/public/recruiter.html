@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recruiter Portal — AI Interview System</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0a0a0f;--surface:#14141c;--surface2:#1c1c28;
+      --border:#2a2a3a;--blue:#4f8ef7;--green:#34d399;
+      --yellow:#fbbf24;--red:#f87171;--purple:#a78bfa;
+      --text:#f0f0f5;--sub:#8888aa;
+    }
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         background:var(--bg);color:var(--text);min-height:100vh}
+
+    /* ── Top nav ── */
+    .topnav{display:flex;align-items:center;justify-content:space-between;
+            padding:16px 32px;border-bottom:1px solid var(--border);
+            background:var(--surface);position:sticky;top:0;z-index:100}
+    .nav-logo{font-size:15px;font-weight:800;letter-spacing:.5px}
+    .nav-logo span{color:var(--blue)}
+    .nav-tabs{display:flex;gap:4px}
+    .tab{padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;
+         font-weight:600;color:var(--sub);background:transparent;border:none;
+         transition:all .18s}
+    .tab:hover{background:var(--surface2);color:var(--text)}
+    .tab.active{background:rgba(79,142,247,.15);color:var(--blue)}
+    .nav-back{color:var(--sub);text-decoration:none;font-size:13px;
+              display:flex;align-items:center;gap:6px}
+    .nav-back:hover{color:var(--text)}
+
+    /* ── Page wrapper ── */
+    .page{display:none;max-width:800px;margin:0 auto;padding:40px 24px}
+    .page.active{display:block}
+
+    /* ── Section headings ── */
+    h2{font-size:24px;font-weight:800;margin-bottom:6px}
+    .page-sub{font-size:14px;color:var(--sub);margin-bottom:32px}
+
+    /* ── Card ── */
+    .card{background:var(--surface);border:1px solid var(--border);
+          border-radius:16px;padding:28px}
+
+    /* ── Form ── */
+    .form-group{margin-bottom:20px}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+    label{display:block;font-size:13px;font-weight:600;color:var(--sub);
+          margin-bottom:7px;letter-spacing:.3px;text-transform:uppercase}
+    input[type=text],input[type=email],textarea,select{
+      width:100%;padding:11px 14px;background:var(--surface2);
+      border:1.5px solid var(--border);border-radius:10px;
+      color:var(--text);font-size:14px;font-family:inherit;outline:none;
+      transition:border-color .2s}
+    input:focus,textarea:focus,select:focus{border-color:var(--blue)}
+    textarea{resize:vertical;min-height:90px}
+    ::placeholder{color:var(--sub)}
+
+    /* ── Auto-extracted skills preview ── */
+    .skills-preview {
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 48px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-items: center;
+    }
+    .extracted-skill {
+      background: rgba(79,142,247,.15);
+      color: var(--blue);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .skill-confidence {
+      opacity: 0.7;
+      font-size: 11px;
+    }
+
+    /* ── Tag input (kept for compatibility) ── */
+    .tag-wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+              padding:8px 10px;background:var(--surface2);border:1.5px solid var(--border);
+              border-radius:10px;cursor:text;min-height:46px;transition:border-color .2s}
+    .tag-wrap:focus-within{border-color:var(--blue)}
+    .tag{background:rgba(79,142,247,.18);color:var(--blue);
+         padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;
+         display:flex;align-items:center;gap:5px}
+    .tag-remove{cursor:pointer;opacity:.7;font-size:14px;line-height:1}
+    .tag-remove:hover{opacity:1}
+    .tag-input{background:transparent;border:none;outline:none;color:var(--text);
+               font-size:14px;font-family:inherit;flex:1;min-width:120px}
+
+    /* ── Buttons ── */
+    .btn{padding:11px 22px;border-radius:10px;border:none;cursor:pointer;
+         font-size:14px;font-weight:700;transition:opacity .15s,transform .1s;
+         font-family:inherit}
+    .btn:hover{opacity:.88}.btn:active{transform:scale(.97)}
+    .btn-primary{background:var(--blue);color:#fff}
+    .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+    .btn-green{background:var(--green);color:#0a0a0f}
+    .btn-sm{padding:7px 14px;font-size:12px}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* ── Room code display ── */
+    .room-code-box{text-align:center;padding:40px;background:var(--surface2);
+                   border-radius:16px;border:2px dashed rgba(79,142,247,.3);
+                   margin:24px 0}
+    .room-code{font-size:clamp(36px,8vw,64px);font-weight:900;letter-spacing:6px;
+               color:var(--blue);font-family:'Courier New',monospace;
+               text-shadow:0 0 40px rgba(79,142,247,.3)}
+    .room-code-hint{font-size:14px;color:var(--sub);margin-top:10px}
+    .copy-btn{margin-top:16px;display:inline-flex;align-items:center;gap:6px;
+              padding:8px 20px;background:rgba(79,142,247,.15);color:var(--blue);
+              border:1px solid rgba(79,142,247,.3);border-radius:8px;
+              cursor:pointer;font-size:13px;font-weight:700;transition:all .18s}
+    .copy-btn:hover{background:rgba(79,142,247,.25)}
+    .copy-btn.copied{background:rgba(52,211,153,.15);color:var(--green);
+                     border-color:rgba(52,211,153,.3)}
+
+    /* ── Results ── */
+    .room-lookup{display:flex;gap:12px;margin-bottom:28px}
+    .room-lookup input{flex:1;font-size:18px;font-weight:700;letter-spacing:3px;
+                        text-transform:uppercase}
+    .results-header{margin-bottom:24px}
+    .results-header h3{font-size:18px;font-weight:700}
+    .results-header p{font-size:13px;color:var(--sub);margin-top:4px}
+    .stats-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+    .stat-pill{background:var(--surface2);border:1px solid var(--border);
+               border-radius:10px;padding:10px 16px;min-width:90px;text-align:center}
+    .stat-pill .val{font-size:22px;font-weight:800}
+    .stat-pill .lbl{font-size:11px;color:var(--sub);margin-top:2px;
+                     text-transform:uppercase;letter-spacing:.5px}
+    .val.blue{color:var(--blue)}.val.green{color:var(--green)}
+    .val.yellow{color:var(--yellow)}.val.red{color:var(--red)}
+
+    /* ── Candidate cards ── */
+    .cand-list{display:flex;flex-direction:column;gap:12px}
+    .cand-card{background:var(--surface);border:1px solid var(--border);
+               border-radius:14px;overflow:hidden;transition:border-color .2s}
+    .cand-card:hover{border-color:rgba(79,142,247,.4)}
+    .cand-header{padding:16px 20px;display:flex;align-items:center;
+                 justify-content:space-between;cursor:pointer;gap:12px}
+    .cand-left{display:flex;align-items:center;gap:14px}
+    .cand-avatar{width:40px;height:40px;border-radius:50%;
+                 background:rgba(79,142,247,.2);display:flex;
+                 align-items:center;justify-content:center;
+                 font-weight:800;font-size:15px;color:var(--blue);flex-shrink:0}
+    .cand-name{font-size:15px;font-weight:700}
+    .cand-email{font-size:12px;color:var(--sub)}
+    .cand-right{display:flex;align-items:center;gap:10px}
+    .score-badge{font-size:15px;font-weight:800;min-width:44px;text-align:right}
+    .rec-pill{padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700}
+    .rec-pill.strong{background:rgba(52,211,153,.15);color:var(--green)}
+    .rec-pill.consider{background:rgba(251,191,36,.15);color:var(--yellow)}
+    .rec-pill.pass{background:rgba(248,113,113,.15);color:var(--red)}
+    .rec-pill.pending{background:rgba(136,136,170,.12);color:var(--sub)}
+    .cand-toggle{color:var(--sub);font-size:18px;transition:transform .2s}
+    .cand-card.expanded .cand-toggle{transform:rotate(180deg)}
+
+    /* ── Expanded evaluation ── */
+    .cand-body{display:none;padding:0 20px 20px;border-top:1px solid var(--border)}
+    .cand-card.expanded .cand-body{display:block}
+    .eval-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+               gap:12px;margin-top:16px}
+    .eval-item{background:var(--surface2);border-radius:10px;padding:12px}
+    .eval-item label{font-size:11px;color:var(--sub);text-transform:uppercase;
+                     letter-spacing:.4px;display:block;margin-bottom:4px}
+    .eval-item .eval-val{font-size:20px;font-weight:800}
+    .bar-wrap{height:4px;background:rgba(255,255,255,.08);border-radius:2px;
+              margin-top:6px;overflow:hidden}
+    .bar-fill{height:100%;border-radius:2px;background:var(--blue);transition:width .5s}
+    .skills-row{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 4px}
+    .skill-tag{background:var(--surface2);border:1px solid var(--border);
+               padding:3px 10px;border-radius:999px;font-size:12px;color:var(--sub)}
+    .session-meta{font-size:12px;color:var(--sub);margin-top:12px;
+                  display:flex;gap:16px;flex-wrap:wrap}
+
+    /* ── Alert / empty ── */
+    .alert{padding:14px 18px;border-radius:10px;font-size:14px;margin-bottom:16px}
+    .alert.error{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:var(--red)}
+    .alert.success{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:var(--green)}
+    .empty{text-align:center;padding:48px;color:var(--sub);font-size:14px}
+    .empty-icon{font-size:40px;margin-bottom:12px}
+
+    /* spinner */
+    .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);
+          border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;
+          vertical-align:middle;margin-right:6px}
+    @keyframes sp{to{transform:rotate(360deg)}}
+
+    /* divider */
+    .divider{height:1px;background:var(--border);margin:20px 0}
+
+    @media(max-width:600px){
+      .form-row{grid-template-columns:1fr}
+      .topnav{padding:14px 16px}
+      .page{padding:24px 16px}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Top nav ── -->
+<nav class="topnav">
+  <div class="nav-logo">AI <span>Interview</span></div>
+  <div class="nav-tabs">
+    <button class="tab active" onclick="showTab('create')">Create Room</button>
+    <button class="tab" onclick="showTab('results')">View Results</button>
+  </div>
+  <a href="/" class="nav-back">← Home</a>
+</nav>
+
+<!-- ════════════════════════════ CREATE ROOM ════════════════════════════ -->
+<div id="tab-create" class="page active">
+  <h2>Create Interview Room</h2>
+  <p class="page-sub">Define the role and evaluation criteria. You'll get a room code to share with candidates.</p>
+
+  <div id="create-alert"></div>
+
+  <div class="card">
+    <div class="form-row">
+      <div>
+        <label>Job Title <span style="color:var(--red)">*</span></label>
+        <input type="text" id="job-title" placeholder="e.g. Senior Backend Engineer" />
+      </div>
+      <div>
+        <label>Department</label>
+        <input type="text" id="job-dept" placeholder="e.g. Engineering" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label>Location</label>
+        <input type="text" id="job-location" placeholder="e.g. Remote / Singapore" />
+      </div>
+      <div><!-- spacer --></div>
+    </div>
+
+    <div class="form-group">
+      <label>Job Description <span style="color:var(--red)">*</span></label>
+      <textarea id="job-desc" rows="4"
+        placeholder="Describe the role, responsibilities, and what success looks like…"
+        oninput="autoExtractSkills()"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Required Skills (Auto-Extracted)</label>
+      <div class="skills-preview" id="skills-preview">
+        <div style="color:var(--sub);font-style:italic;padding:12px">Skills will be automatically extracted from job description...</div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="extractSkills()" id="extract-btn" style="margin-top:8px">🧠 Re-extract Skills</button>
+    </div>
+
+    <div class="form-group">
+      <label>Evaluation Criteria</label>
+      <textarea id="eval-criteria" rows="4"
+        placeholder="What specifically should the AI look for? e.g. 'Strong system design fundamentals, experience with high-traffic APIs, ability to handle ambiguity…'"></textarea>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="resetCreate()">Clear</button>
+      <button class="btn btn-primary" id="create-btn" onclick="createRoom()">
+        Create Interview Room
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ ROOM CREATED MODAL-STYLE ════════════════════════ -->
+<div id="tab-created" class="page">
+  <h2>Room Created! 🎉</h2>
+  <p class="page-sub">Share the code below with your candidates.</p>
+
+  <div class="room-code-box">
+    <div id="display-code" class="room-code">INT-XXXX</div>
+    <p class="room-code-hint">Interview Room Code</p>
+    <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <div class="copy-btn" id="copy-btn" onclick="copyCode()">
+        <span id="copy-icon">📋</span> <span id="copy-text">Copy Code</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div style="font-size:13px;color:var(--sub);margin-bottom:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px">Room Summary</div>
+    <div id="created-summary"></div>
+  </div>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <button class="btn btn-primary" onclick="viewThisRoom()">View Candidate Results →</button>
+    <button class="btn btn-ghost" onclick="showTab('create'); resetCreate()">Create Another Room</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════ VIEW RESULTS ════════════════════════════ -->
+<div id="tab-results" class="page">
+  <h2>Results Dashboard</h2>
+  <p class="page-sub">Access the comprehensive results dashboard to manage all your interview rooms and view candidate results.</p>
+
+  <div class="card" style="text-align: center; padding: 60px 28px;">
+    <div style="font-size: 48px; margin-bottom: 16px; color: var(--blue);">📊</div>
+    <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 12px;">Results Dashboard</h3>
+    <p style="color: var(--sub); margin-bottom: 32px; font-size: 14px;">
+      View all your interview rooms, candidate results, evaluations, and manage your recruitment pipeline in one place.
+    </p>
+    <button class="btn btn-primary" onclick="window.location.href='/results'">
+      Open Results Dashboard
+    </button>
+  </div>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const API = '/api';  // proxied to FastAPI
+
+// ─── Tab navigation ───────────────────────────────────────────────────────────
+const TABS = ['create', 'created', 'results'];
+let _tabs_with_btn = ['create', 'results'];
+
+function showTab(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const el = document.getElementById(`tab-${name}`);
+  if (el) el.classList.add('active');
+  // highlight nav button if applicable
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.textContent.trim().toLowerCase().includes(name === 'create' ? 'create' : 'result')) {
+      t.classList.add('active');
+    }
+  });
+}
+
+// ─── Auto skill extraction ────────────────────────────────────────────────────
+let _extractedSkills = [];
+let _extractionTimeout = null;
+
+function autoExtractSkills() {
+  clearTimeout(_extractionTimeout);
+  _extractionTimeout = setTimeout(() => {
+    const title = document.getElementById('job-title').value.trim();
+    const desc = document.getElementById('job-desc').value.trim();
+    if (title && desc && desc.length > 50) {
+      extractSkills();
+    }
+  }, 2000); // extract after 2s of no typing
+}
+
+async function extractSkills() {
+  const title = document.getElementById('job-title').value.trim();
+  const desc = document.getElementById('job-desc').value.trim();
+  
+  if (!title || !desc) {
+    showAlert('create-alert', 'Please enter job title and description first.');
+    return;
+  }
+
+  const btn = document.getElementById('extract-btn');
+  const preview = document.getElementById('skills-preview');
+  
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Extracting…';
+  preview.innerHTML = '<div style="color:var(--sub);padding:8px"><span class="spin"></span> Analyzing job description...</div>';
+
+  try {
+    const res = await fetch(`${API}/extract-skills`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_title: title, job_description: desc }),
+    });
+    
+    if (!res.ok) {
+      throw new Error('Extraction failed');
+    }
+    
+    const data = await res.json();
+    _extractedSkills = data.skills || [];
+    
+    if (_extractedSkills.length === 0) {
+      preview.innerHTML = '<div style="color:var(--sub);font-style:italic;padding:8px">No skills detected. Please refine job description.</div>';
+    } else {
+      preview.innerHTML = _extractedSkills.map(skill => 
+        `<span class="extracted-skill">${skill}</span>`
+      ).join('');
+    }
+  } catch (err) {
+    console.error('Skill extraction error:', err);
+    preview.innerHTML = '<div style="color:var(--red);font-size:13px;padding:8px">⚠️ Auto-extraction failed. Generic skills will be used.</div>';
+    _extractedSkills = ['Problem Solving', 'Communication', 'Technical Skills'];
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🧠 Re-extract Skills';
+  }
+}
+
+// ─── Skills tag input (legacy - keep for compatibility) ──────────────────────
+let _skills = [];
+
+function focusSkillInput() { document.getElementById('skill-input').focus(); }
+
+function handleSkillKey(e) {
+  const input = e.target;
+  if ((e.key === 'Enter' || e.key === ',') && input.value.trim()) {
+    e.preventDefault();
+    addSkill(input.value.trim());
+    input.value = '';
+  } else if (e.key === 'Backspace' && !input.value && _skills.length) {
+    removeSkill(_skills.length - 1);
+  }
+}
+
+function addSkill(s) {
+  if (_skills.includes(s)) return;
+  _skills.push(s);
+  renderSkills();
+}
+
+function removeSkill(idx) {
+  _skills.splice(idx, 1);
+  renderSkills();
+}
+
+function renderSkills() {
+  const wrap = document.getElementById('skills-wrap');
+  wrap.querySelectorAll('.tag').forEach(t => t.remove());
+  _skills.forEach((s, i) => {
+    const t = document.createElement('div');
+    t.className = 'tag';
+    t.innerHTML = `${s} <span class="tag-remove" onclick="removeSkill(${i})">×</span>`;
+    wrap.insertBefore(t, document.getElementById('skill-input'));
+  });
+}
+
+// ─── Create Room ──────────────────────────────────────────────────────────────
+let _createdCode = '';
+let _createdJobId = '';
+let _createdTitle = '';
+
+function showAlert(id, msg, type = 'error') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = `<div class="alert ${type}">${msg}</div>`;
+  setTimeout(() => { el.innerHTML = ''; }, 6000);
+}
+
+async function createRoom() {
+  const title = document.getElementById('job-title').value.trim();
+  const desc  = document.getElementById('job-desc').value.trim();
+  if (!title) { showAlert('create-alert', 'Job title is required.'); return; }
+  if (!desc)  { showAlert('create-alert', 'Job description is required.'); return; }
+
+  const btn = document.getElementById('create-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Creating & Extracting Skills…';
+
+  try {
+    const res = await fetch(`${API}/rooms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description: desc,
+        evaluation_criteria: document.getElementById('eval-criteria').value.trim(),
+        department: document.getElementById('job-dept').value.trim(),
+        location:   document.getElementById('job-location').value.trim(),
+        interviewer_id: localStorage.getItem('interviewerId') || 'default_interviewer',
+      }),
+    });
+    if (!res.ok) { 
+      const e = await res.json(); 
+      throw new Error(e.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    _createdCode  = data.room_code;
+    _createdJobId = data.job_id;
+    _createdTitle = title;
+    _extractedSkills = data.extracted_skills || [];
+
+    document.getElementById('display-code').textContent = _createdCode;
+    document.getElementById('created-summary').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div><span style="color:var(--sub);font-size:12px">TITLE</span><br/><strong>${title}</strong></div>
+        <div><span style="color:var(--sub);font-size:12px">AUTO-EXTRACTED SKILLS</span><br/>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+            ${_extractedSkills.map(s => `<span class="skill-tag">${s}</span>`).join('')}
+          </div>
+        </div>
+        ${document.getElementById('eval-criteria').value.trim() ? `
+        <div><span style="color:var(--sub);font-size:12px">EVALUATION CRITERIA</span><br/>
+          <span style="font-size:13px">${document.getElementById('eval-criteria').value.trim()}</span>
+        </div>` : ''}
+      </div>`;
+    showTab('created');
+  } catch (err) {
+    console.error('Room creation error:', err);
+    showAlert('create-alert', `Failed to create room: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create Interview Room';
+  }
+}
+
+function resetCreate() {
+  document.getElementById('job-title').value = '';
+  document.getElementById('job-dept').value  = '';
+  document.getElementById('job-location').value = '';
+  document.getElementById('job-desc').value  = '';
+  document.getElementById('eval-criteria').value = '';
+  _extractedSkills = [];
+  document.getElementById('skills-preview').innerHTML = '<div style="color:var(--sub);font-style:italic;padding:12px">Skills will be automatically extracted from job description...</div>';
+  clearTimeout(_extractionTimeout);
+}
+
+// ─── Copy code ────────────────────────────────────────────────────────────────
+function copyCode() {
+  navigator.clipboard.writeText(_createdCode).then(() => {
+    const btn = document.getElementById('copy-btn');
+    document.getElementById('copy-icon').textContent = '✅';
+    document.getElementById('copy-text').textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      document.getElementById('copy-icon').textContent = '📋';
+      document.getElementById('copy-text').textContent = 'Copy Code';
+      btn.classList.remove('copied');
+    }, 2500);
+  });
+}
+
+function viewThisRoom() {
+  document.getElementById('lookup-code').value = _createdCode;
+  showTab('results');
+  loadResults();
+}
+
+// ─── View Results ─────────────────────────────────────────────────────────────
+async function loadResults() {
+  const code = document.getElementById('lookup-code').value.trim().toUpperCase();
+  if (!code) { showAlert('results-alert', 'Enter a room code first.'); return; }
+
+  const content = document.getElementById('results-content');
+  content.innerHTML = `<div class="empty"><span class="spin" style="width:24px;height:24px;border-width:3px"></span></div>`;
+
+  try {
+    const res = await fetch(`${API}/rooms/${code}/candidates`);
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || res.statusText); }
+    const data = await res.json();
+    renderResults(data);
+  } catch (err) {
+    showAlert('results-alert', `${err.message}`);
+    content.innerHTML = '';
+  }
+}
+
+function renderResults({ job, candidates }) {
+  const content = document.getElementById('results-content');
+
+  // Stats
+  const total    = candidates.length;
+  const evaled   = candidates.filter(c => c.evaluation).length;
+  const avgScore = evaled
+    ? (candidates.filter(c=>c.evaluation).reduce((s,c)=>s+c.evaluation.total_score,0) / evaled).toFixed(1)
+    : '—';
+  const strongHire = candidates.filter(c=>c.evaluation?.recommendation==='Strong Hire').length;
+  const consider   = candidates.filter(c=>c.evaluation?.recommendation==='Consider').length;
+  const pass_      = candidates.filter(c=>c.evaluation?.recommendation==='Pass').length;
+
+  content.innerHTML = `
+    <div class="results-header">
+      <h3>${job.title}</h3>
+      <p>${job.department || ''} ${job.location ? '· ' + job.location : ''}</p>
+    </div>
+    <div class="stats-row">
+      <div class="stat-pill"><div class="val blue">${total}</div><div class="lbl">Candidates</div></div>
+      <div class="stat-pill"><div class="val">${evaled}</div><div class="lbl">Evaluated</div></div>
+      <div class="stat-pill"><div class="val green">${avgScore}</div><div class="lbl">Avg Score</div></div>
+      <div class="stat-pill"><div class="val green">${strongHire}</div><div class="lbl">Strong Hire</div></div>
+      <div class="stat-pill"><div class="val yellow">${consider}</div><div class="lbl">Consider</div></div>
+      <div class="stat-pill"><div class="val red">${pass_}</div><div class="lbl">Pass</div></div>
+    </div>
+    ${total === 0
+      ? `<div class="empty"><div class="empty-icon">👥</div>No candidates have joined this room yet.<br/>Share the code <strong>${job.room_code}</strong> with candidates.</div>`
+      : `<div class="cand-list">${candidates.map((c, i) => renderCandCard(c, i)).join('')}</div>`
+    }`;
+}
+
+function recClass(rec) {
+  if (!rec) return 'pending';
+  if (rec === 'Strong Hire') return 'strong';
+  if (rec === 'Consider')    return 'consider';
+  return 'pass';
+}
+
+function scoreColor(s) {
+  if (s >= 75) return 'var(--green)';
+  if (s >= 50) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+function initials(name = '') {
+  return name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase() || '?';
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+function renderCandCard({ session, candidate, evaluation }, idx) {
+  const score = evaluation ? evaluation.total_score.toFixed(1) : '—';
+  const rec   = evaluation?.recommendation || 'Pending';
+  const color = evaluation ? scoreColor(evaluation.total_score) : 'var(--sub)';
+
+  return `
+  <div class="cand-card" id="cand-${idx}">
+    <div class="cand-header" onclick="toggleCand(${idx})">
+      <div class="cand-left">
+        <div class="cand-avatar">${initials(candidate.name)}</div>
+        <div>
+          <div class="cand-name">${candidate.name || 'Unknown'}</div>
+          <div class="cand-email">${candidate.email || ''} · ID: ${candidate.candidate_id}</div>
+        </div>
+      </div>
+      <div class="cand-right">
+        <span class="score-badge" style="color:${color}">${score}</span>
+        <span class="rec-pill ${recClass(evaluation?.recommendation)}">${rec}</span>
+        <span class="cand-toggle">⌄</span>
+      </div>
+    </div>
+    <div class="cand-body">
+      ${evaluation ? `
+      <div class="eval-grid">
+        ${[
+          ['Technical',      evaluation.technical_score,       'var(--blue)'],
+          ['Communication',  evaluation.communication_score,   'var(--purple)'],
+          ['Problem Solving',evaluation.problem_solving_score, 'var(--yellow)'],
+          ['Cultural Fit',   evaluation.cultural_fit_score,    'var(--green)'],
+          ['Total Score',    evaluation.total_score,           scoreColor(evaluation.total_score)],
+        ].map(([lbl, val, col]) => `
+          <div class="eval-item">
+            <label>${lbl}</label>
+            <div class="eval-val" style="color:${col}">${val.toFixed(1)}</div>
+            <div class="bar-wrap"><div class="bar-fill" style="width:${val}%;background:${col}"></div></div>
+          </div>`).join('')}
+      </div>
+      ${evaluation.bias_risk ? `<div style="margin-top:12px;font-size:13px;color:var(--sub)">Bias Risk: <strong style="color:${evaluation.bias_risk==='HIGH'?'var(--red)':evaluation.bias_risk==='MEDIUM'?'var(--yellow)':'var(--green)'}">${evaluation.bias_risk}</strong></div>` : ''}
+      ` : `<div style="padding:16px 0;color:var(--sub);font-size:14px">Interview in progress or evaluation pending…</div>`}
+
+      <div class="divider"></div>
+      <div style="font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Session Info</div>
+      <div class="session-meta">
+        <span>Stage: <strong style="color:var(--text)">${session.stage || '—'}</strong></span>
+        <span>Status: <strong style="color:var(--text)">${session.status || '—'}</strong></span>
+        <span>Started: ${fmtDate(session.started_at)}</span>
+        ${session.completed_at ? `<span>Completed: ${fmtDate(session.completed_at)}</span>` : ''}
+      </div>
+
+      ${candidate.resume_text ? `
+      <div class="divider"></div>
+      <div style="font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Resume Summary</div>
+      <div style="font-size:13px;color:var(--sub);line-height:1.6;max-height:120px;overflow-y:auto;white-space:pre-wrap">${candidate.resume_text.slice(0, 600)}${candidate.resume_text.length > 600 ? '…' : ''}</div>
+      ` : ''}
+    </div>
+  </div>`;
+}
+
+function toggleCand(idx) {
+  const card = document.getElementById(`cand-${idx}`);
+  card.classList.toggle('expanded');
+}
+</script>
+</body>
+</html>

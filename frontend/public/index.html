@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Interview System</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f;
+      --card: #14141c;
+      --border: #2a2a3a;
+      --blue: #4f8ef7;
+      --purple: #8b5cf6;
+      --green: #34d399;
+      --text: #f0f0f5;
+      --sub: #8888aa;
+      --glow-blue: rgba(79,142,247,.18);
+      --glow-purple: rgba(139,92,246,.18);
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    /* ── Header ── */
+    .logo {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--sub);
+      margin-bottom: 20px;
+    }
+    .logo span { color: var(--blue); }
+    h1 {
+      font-size: clamp(28px, 5vw, 48px);
+      font-weight: 800;
+      text-align: center;
+      line-height: 1.15;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, var(--text) 0%, var(--blue) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle {
+      font-size: 16px;
+      color: var(--sub);
+      text-align: center;
+      max-width: 480px;
+      line-height: 1.6;
+      margin-bottom: 56px;
+    }
+
+    /* ── Cards ── */
+    .portals {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      width: 100%;
+      max-width: 680px;
+    }
+    .portal-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 32px;
+      cursor: pointer;
+      transition: border-color .25s, transform .2s, box-shadow .25s;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .portal-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity .3s;
+      border-radius: 20px;
+    }
+    .portal-card.recruiter::before { background: radial-gradient(circle at 30% 30%, var(--glow-blue), transparent 70%); }
+    .portal-card.candidate::before { background: radial-gradient(circle at 30% 30%, var(--glow-purple), transparent 70%); }
+    .portal-card:hover { transform: translateY(-4px); }
+    .portal-card.recruiter:hover { border-color: var(--blue); box-shadow: 0 8px 40px rgba(79,142,247,.15); }
+    .portal-card.candidate:hover { border-color: var(--purple); box-shadow: 0 8px 40px rgba(139,92,246,.15); }
+    .portal-card:hover::before { opacity: 1; }
+
+    .portal-icon {
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+    .recruiter .portal-icon { background: rgba(79,142,247,.15); }
+    .candidate .portal-icon { background: rgba(139,92,246,.15); }
+
+    .portal-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .portal-desc {
+      font-size: 14px;
+      color: var(--sub);
+      line-height: 1.65;
+    }
+    .portal-cta {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .recruiter .portal-cta { color: var(--blue); }
+    .candidate .portal-cta { color: var(--purple); }
+    .arrow { font-size: 18px; transition: transform .2s; }
+    .portal-card:hover .arrow { transform: translateX(5px); }
+
+    /* ── Features strip ── */
+    .features {
+      margin-top: 56px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      max-width: 600px;
+    }
+    .feat-tag {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--sub);
+    }
+    .feat-tag span { color: var(--green); margin-right: 5px; }
+
+    /* ── Horsie mascot ── */
+    .mascot-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 32px;
+      position: relative;
+    }
+    .mascot-svg {
+      width: 260px;
+      height: 260px;
+      filter: drop-shadow(0 16px 40px rgba(200,140,80,.4));
+      animation: horseBob 2.4s ease-in-out infinite;
+      cursor: pointer;
+    }
+    .mascot-svg:hover {
+      animation: horseWiggle 0.5s ease-in-out, horseBob 2.4s ease-in-out 0.5s infinite;
+    }
+    .mascot-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--sub);
+      margin-top: 6px;
+    }
+    /* body bob */
+    @keyframes horseBob {
+      0%,100% { transform: translateY(0) rotate(0deg); }
+      25%      { transform: translateY(-6px) rotate(-1deg); }
+      75%      { transform: translateY(2px) rotate(1deg); }
+    }
+    @keyframes horseWiggle {
+      0%,100% { transform: rotate(0deg); }
+      20%     { transform: rotate(-8deg); }
+      50%     { transform: rotate(8deg); }
+      80%     { transform: rotate(-4deg); }
+    }
+    /* blink: hides the eyes */
+    @keyframes blink {
+      0%,94%,100% { transform: scaleY(1); }
+      96%,98%     { transform: scaleY(0.05); }
+    }
+    .eye-group {
+      transform-origin: center 52%;
+      animation: blink 3.2s ease-in-out infinite;
+    }
+    .eye-group-r {
+      transform-origin: center 52%;
+      animation: blink 3.2s ease-in-out infinite;
+      animation-delay: 0.08s;
+    }
+    /* ear wiggle */
+    @keyframes earWiggle {
+      0%,85%,100% { transform: rotate(0deg); }
+      90%         { transform: rotate(-12deg); }
+      95%         { transform: rotate(8deg); }
+    }
+    .ear-left  { transform-origin: 50% 100%; animation: earWiggle 3.2s ease-in-out infinite; }
+    .ear-right { transform-origin: 50% 100%; animation: earWiggle 3.2s ease-in-out infinite; animation-delay: 0.15s; }
+    /* tail swish */
+    @keyframes tailSwish {
+      0%,100% { transform: rotate(0deg); }
+      40%     { transform: rotate(12deg); }
+      70%     { transform: rotate(-8deg); }
+    }
+    .tail { transform-origin: 10% 10%; animation: tailSwish 2s ease-in-out infinite; }
+    /* shirt bounce */
+    @keyframes shirtPulse {
+      0%,100% { transform: scaleX(1); }
+      50%     { transform: scaleX(1.03); }
+    }
+    .shirt { transform-origin: 50% 40%; animation: shirtPulse 2.4s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div class="logo">AI <span>Interview</span> System</div>
+
+  <!-- ✨ Cute Disney Horse Mascot ✨ -->
+  <div class="mascot-wrap">
+    <svg class="mascot-svg" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Coat gradient -->
+        <radialGradient id="bodyGrad" cx="45%" cy="35%" r="60%">
+          <stop offset="0%"   stop-color="#F5C57A"/>
+          <stop offset="55%"  stop-color="#D9924A"/>
+          <stop offset="100%" stop-color="#B8712E"/>
+        </radialGradient>
+        <radialGradient id="faceGrad" cx="40%" cy="30%" r="60%">
+          <stop offset="0%"   stop-color="#F9D08C"/>
+          <stop offset="60%"  stop-color="#E0A050"/>
+          <stop offset="100%" stop-color="#C47830"/>
+        </radialGradient>
+        <!-- Muzzle -->
+        <radialGradient id="muzzleGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%"   stop-color="#FDDCAA"/>
+          <stop offset="100%" stop-color="#E8B07A"/>
+        </radialGradient>
+        <!-- Eye whites -->
+        <radialGradient id="eyeWhite" cx="38%" cy="32%" r="55%">
+          <stop offset="0%"   stop-color="#FFFFFF"/>
+          <stop offset="100%" stop-color="#E8F0FF"/>
+        </radialGradient>
+        <!-- Iris gradient (teal/blue like foal in image) -->
+        <radialGradient id="irisGrad" cx="38%" cy="30%" r="55%">
+          <stop offset="0%"   stop-color="#7ED4E6"/>
+          <stop offset="50%"  stop-color="#3DACC8"/>
+          <stop offset="100%" stop-color="#1A7A99"/>
+        </radialGradient>
+        <!-- Shirt gradient -->
+        <linearGradient id="shirtGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"   stop-color="#FF6B9D"/>
+          <stop offset="50%"  stop-color="#E84393"/>
+          <stop offset="100%" stop-color="#C2185B"/>
+        </linearGradient>
+        <!-- Shirt stripes (kept subtle so ELASTIC text stays readable) -->
+        <pattern id="stripes" patternUnits="userSpaceOnUse" width="8" height="8">
+          <rect width="8" height="8" fill="none"/>
+          <line x1="0" y1="4" x2="8" y2="4" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
+        </pattern>
+        <!-- Text shadow filter for ELASTIC label -->
+        <filter id="textShadow" x="-10%" y="-30%" width="120%" height="160%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="rgba(140,0,60,0.7)"/>
+        </filter>
+        <!-- Hoof gradient -->
+        <linearGradient id="hoofGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"   stop-color="#A0A8B8"/>
+          <stop offset="100%" stop-color="#6B7280"/>
+        </linearGradient>
+        <!-- Mane gradient -->
+        <linearGradient id="maneGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stop-color="#C0392B"/>
+          <stop offset="60%"  stop-color="#96200E"/>
+          <stop offset="100%" stop-color="#6B1005"/>
+        </linearGradient>
+        <!-- Drop shadow filter -->
+        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="1" dy="3" stdDeviation="3" flood-color="rgba(100,50,10,0.35)"/>
+        </filter>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="2" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- ══ SHADOW ══ -->
+      <ellipse cx="100" cy="215" rx="52" ry="7" fill="rgba(0,0,0,0.18)"/>
+
+      <!-- ══ TAIL ══ -->
+      <g class="tail">
+        <path d="M148 150 Q175 140 178 125 Q182 108 170 100 Q165 97 162 103 Q172 110 168 122 Q163 135 145 143 Z"
+              fill="url(#maneGrad)" opacity="0.95"/>
+        <path d="M148 153 Q176 148 180 135 Q185 120 174 112 Q172 124 164 132 Q156 140 146 147 Z"
+              fill="#7A1508" opacity="0.6"/>
+        <!-- Tail strands -->
+        <path d="M148 152 Q170 148 176 138" stroke="#C0392B" stroke-width="1.5" fill="none" opacity="0.7"/>
+        <path d="M148 155 Q172 152 179 144" stroke="#96200E" stroke-width="1"   fill="none" opacity="0.5"/>
+      </g>
+
+      <!-- ══ BODY ══ -->
+      <ellipse cx="104" cy="158" rx="50" ry="40" fill="url(#bodyGrad)" filter="url(#softShadow)"/>
+
+      <!-- ══ ELASTIC SHIRT ══ -->
+      <g class="shirt">
+        <!-- Main shirt body -->
+        <path d="M62 138 Q60 155 62 170 Q75 178 104 179 Q133 178 146 170 Q148 155 146 138
+                 Q133 132 104 131 Q75 132 62 138 Z"
+              fill="url(#shirtGrad)"/>
+        <!-- Stripe overlay for elastic texture -->
+        <path d="M62 138 Q60 155 62 170 Q75 178 104 179 Q133 178 146 170 Q148 155 146 138
+                 Q133 132 104 131 Q75 132 62 138 Z"
+              fill="url(#stripes)" opacity="0.6"/>
+        <!-- Collar rib band -->
+        <path d="M80 131 Q104 127 128 131 Q128 137 104 139 Q80 137 80 131 Z"
+              fill="#FF8AB0" opacity="0.8"/>
+        <!-- Neck opening oval -->
+        <ellipse cx="104" cy="131" rx="24" ry="7" fill="#D9924A"/>
+        <!-- Collar thin line -->
+        <path d="M80 131 Q104 126 128 131" stroke="#FF6B9D" stroke-width="1.5" fill="none"/>
+        <!-- Sleeve left -->
+        <path d="M62 138 Q48 135 43 148 Q42 158 54 162 Q62 158 68 152 Q68 145 62 138 Z"
+              fill="url(#shirtGrad)"/>
+        <path d="M62 138 Q48 135 43 148 Q42 158 54 162 Q62 158 68 152 Q68 145 62 138 Z"
+              fill="url(#stripes)" opacity="0.6"/>
+        <!-- Sleeve right -->
+        <path d="M146 138 Q160 135 165 148 Q166 158 154 162 Q146 158 140 152 Q140 145 146 138 Z"
+              fill="url(#shirtGrad)"/>
+        <path d="M146 138 Q160 135 165 148 Q166 158 154 162 Q146 158 140 152 Q140 145 146 138 Z"
+              fill="url(#stripes)" opacity="0.6"/>
+        <!-- Sleeve cuffs -->
+        <ellipse cx="48"  cy="156" rx="8" ry="5" fill="#FF8AB0"/>
+        <ellipse cx="160" cy="156" rx="8" ry="5" fill="#FF8AB0"/>
+        <!-- Bottom rib band -->
+        <path d="M62 170 Q75 177 104 178 Q133 177 146 170 Q146 175 104 178 Q62 175 62 170 Z"
+              fill="#C2185B" opacity="0.7"/>
+
+        <!-- ══ ELASTIC brand on shirt ══ -->
+        <!-- Pill badge background so text always pops -->
+        <rect x="72" y="149" width="64" height="18" rx="9" fill="rgba(255,255,255,0.22)"/>
+        <rect x="73" y="150" width="62" height="16" rx="8"
+              fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>
+        <!-- The word ELASTIC -->
+        <text
+          x="104" y="162"
+          font-family="'Arial Black','Arial','Helvetica Neue',sans-serif"
+          font-size="11.5"
+          font-weight="900"
+          letter-spacing="2.2"
+          text-anchor="middle"
+          fill="white"
+          filter="url(#textShadow)">ELASTIC</text>
+      </g>
+
+      <!-- ══ LEGS ══ -->
+      <!-- Front left leg -->
+      <rect x="72" y="185" width="16" height="30" rx="7" fill="url(#bodyGrad)"/>
+      <ellipse cx="80" cy="215" rx="9" ry="5" fill="url(#hoofGrad)"/>
+      <!-- Front right leg -->
+      <rect x="112" y="185" width="16" height="30" rx="7" fill="url(#bodyGrad)"/>
+      <ellipse cx="120" cy="215" rx="9" ry="5" fill="url(#hoofGrad)"/>
+
+      <!-- ══ NECK ══ -->
+      <path d="M86 108 Q80 118 80 132 Q88 138 104 139 Q120 138 122 132 Q120 118 114 108 Z"
+            fill="url(#bodyGrad)"/>
+
+      <!-- ══ HEAD ══ -->
+      <ellipse cx="100" cy="85" rx="42" ry="40" fill="url(#faceGrad)" filter="url(#softShadow)"/>
+
+      <!-- ══ EARS ══ -->
+      <g class="ear-left">
+        <ellipse cx="69"  cy="52" rx="11" ry="16" fill="url(#bodyGrad)" transform="rotate(-18,69,52)"/>
+        <ellipse cx="69"  cy="54" rx="6"  ry="10" fill="#FFAABA"        transform="rotate(-18,69,54)"/>
+      </g>
+      <g class="ear-right">
+        <ellipse cx="131" cy="52" rx="11" ry="16" fill="url(#bodyGrad)" transform="rotate(18,131,52)"/>
+        <ellipse cx="131" cy="54" rx="6"  ry="10" fill="#FFAABA"        transform="rotate(18,131,54)"/>
+      </g>
+
+      <!-- ══ MANE (forelock) ══ -->
+      <path d="M72 62 Q68 45 75 35 Q80 28 85 38 Q82 48 80 60 Z"
+            fill="url(#maneGrad)"/>
+      <path d="M82 58 Q80 40 88 30 Q94 22 98 34 Q96 46 92 58 Z"
+            fill="#A02010" opacity="0.9"/>
+      <path d="M90 60 Q90 42 98 32 Q104 24 106 36 Q104 48 100 60 Z"
+            fill="url(#maneGrad)" opacity="0.8"/>
+      <!-- Mane highlight strand -->
+      <path d="M76 56 Q72 40 78 32" stroke="#E84040" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.6"/>
+
+      <!-- ══ MUZZLE ══ -->
+      <ellipse cx="100" cy="100" rx="24" ry="18" fill="url(#muzzleGrad)"/>
+      <!-- Nostril left -->
+      <ellipse cx="91"  cy="99"  rx="4"  ry="3"  fill="#C4845A" opacity="0.7"/>
+      <!-- Nostril right -->
+      <ellipse cx="109" cy="99"  rx="4"  ry="3"  fill="#C4845A" opacity="0.7"/>
+
+      <!-- ══ CUTE SMILE ══ -->
+      <!-- Wide Disney smile -->
+      <path d="M88 107 Q100 117 112 107" stroke="#A0522D" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <!-- Smile cheek fills (blush) -->
+      <ellipse cx="82"  cy="96" rx="9" ry="6" fill="#FF9AC6" opacity="0.45"/>
+      <ellipse cx="118" cy="96" rx="9" ry="6" fill="#FF9AC6" opacity="0.45"/>
+      <!-- Little teeth peek visible from smile -->
+      <path d="M91 109 Q100 115 109 109 Q109 113 100 114 Q91 113 91 109 Z" fill="white" opacity="0.8"/>
+
+      <!-- ══ EYES ══ -->
+      <!-- Left eye group (animates for blink) -->
+      <g class="eye-group" style="transform-box:fill-box;">
+        <!-- White sclera -->
+        <ellipse cx="82" cy="78" rx="13" ry="14" fill="url(#eyeWhite)" filter="url(#softShadow)"/>
+        <!-- Iris -->
+        <ellipse cx="83" cy="79" rx="9"  ry="9.5" fill="url(#irisGrad)"/>
+        <!-- Pupil -->
+        <ellipse cx="84" cy="80" rx="5"  ry="5.5" fill="#0D1B2A"/>
+        <!-- Pupil shine specular -->
+        <ellipse cx="81" cy="76" rx="2.5" ry="2.5" fill="white" opacity="0.95"/>
+        <ellipse cx="85" cy="79" rx="1"   ry="1"   fill="white" opacity="0.6"/>
+        <!-- Eyelashes top -->
+        <path d="M70 72 Q82 64 94 72" stroke="#3A1A0A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <line x1="70" y1="72" x2="67" y2="67" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="75" y1="68" x2="73" y2="63" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="82" y1="65" x2="81" y2="60" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="89" y1="67" x2="90" y2="62" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="94" y1="72" x2="97" y2="68" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <!-- Eyelid (blink covers) -->
+        <path d="M69 72 Q82 63 95 72 L95 73 Q82 65 69 73 Z" fill="#D9924A"/>
+      </g>
+
+      <!-- Right eye group -->
+      <g class="eye-group-r" style="transform-box:fill-box;">
+        <!-- White sclera -->
+        <ellipse cx="118" cy="78" rx="13" ry="14" fill="url(#eyeWhite)" filter="url(#softShadow)"/>
+        <!-- Iris -->
+        <ellipse cx="117" cy="79" rx="9"  ry="9.5" fill="url(#irisGrad)"/>
+        <!-- Pupil -->
+        <ellipse cx="116" cy="80" rx="5"  ry="5.5" fill="#0D1B2A"/>
+        <!-- Pupil shine -->
+        <ellipse cx="113" cy="76" rx="2.5" ry="2.5" fill="white" opacity="0.95"/>
+        <ellipse cx="117" cy="79" rx="1"   ry="1"   fill="white" opacity="0.6"/>
+        <!-- Eyelashes top -->
+        <path d="M106 72 Q118 64 130 72" stroke="#3A1A0A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <line x1="106" y1="72" x2="103" y2="67" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="111" y1="68" x2="109" y2="63" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="118" y1="65" x2="117" y2="60" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="125" y1="67" x2="126" y2="62" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="130" y1="72" x2="133" y2="68" stroke="#3A1A0A" stroke-width="1.8" stroke-linecap="round"/>
+        <!-- Eyelid -->
+        <path d="M105 72 Q118 63 131 72 L131 73 Q118 65 105 73 Z" fill="#D9924A"/>
+      </g>
+
+      <!-- Forehead sheen highlight -->
+      <ellipse cx="94" cy="68" rx="14" ry="8" fill="white" opacity="0.12" transform="rotate(-15,94,68)"/>
+    </svg>
+    <div class="mascot-label">Your AI Interviewer</div>
+  </div>
+  <!-- ── end mascot ── -->
+
+  <h1>Hire Smarter.<br/>Interview at Scale.</h1>
+  <p class="subtitle">
+    AI-powered screening interviews. Create a room, share the code, and let the
+    agent evaluate every candidate against your exact requirements.
+  </p>
+
+  <div class="portals">
+    <a href="/recruiter" class="portal-card recruiter">
+      <div class="portal-icon">💼</div>
+      <div class="portal-title">Recruiter Portal</div>
+      <p class="portal-desc">
+        Create interview rooms, define job requirements and evaluation criteria,
+        then review all candidate results in one place.
+      </p>
+      <div class="portal-cta">Go to Recruiter Portal <span class="arrow">→</span></div>
+    </a>
+
+    <a href="/candidate" class="portal-card candidate">
+      <div class="portal-icon">🎙️</div>
+      <div class="portal-title">Candidate Portal</div>
+      <p class="portal-desc">
+        Enter your interview room code, submit your resume, and complete your
+        AI-powered interview in minutes — from anywhere.
+      </p>
+      <div class="portal-cta">Go to Candidate Portal <span class="arrow">→</span></div>
+    </a>
+  </div>
+
+  <div class="features">
+    <div class="feat-tag"><span>✦</span>Elastic AI Agents</div>
+    <div class="feat-tag"><span>✦</span>Claude Sonnet 3.7</div>
+    <div class="feat-tag"><span>✦</span>Real-time Scoring</div>
+    <div class="feat-tag"><span>✦</span>Bias Detection</div>
+    <div class="feat-tag"><span>✦</span>Skill Matching</div>
+    <div class="feat-tag"><span>✦</span>Benchmark Analysis</div>
+  </div>
+</body>
+</html>

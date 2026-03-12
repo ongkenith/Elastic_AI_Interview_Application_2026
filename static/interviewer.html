@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interviewer Monitor — AI Interview System</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f5f7; --card: #fff; --border: #e2e2e7;
+      --blue: #0066ff; --green: #34c759; --yellow: #ff9500; --red: #ff3b30;
+      --text: #1d1d1f; --sub: #6e6e73;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      background: #1c1c1e; color: #fff;
+      padding: 16px 28px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    header h1 { font-size: 17px; font-weight: 700; }
+    header a { color: #888; font-size: 13px; margin-left: auto; text-decoration: none; }
+    header a:hover { color: #fff; }
+    #ws-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+    #ws-dot.connected  { background: var(--green); }
+    #ws-dot.connecting { background: var(--yellow); }
+    #ws-label { font-size: 12px; color: #888; }
+
+    /* ── Session picker ── */
+    .session-bar {
+      background: #fff; border-bottom: 1px solid var(--border);
+      padding: 12px 28px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .session-bar label { font-size: 13px; font-weight: 600; }
+    .session-bar input { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+                         font-size: 13px; width: 340px; outline: none; }
+    .session-bar input:focus { border-color: var(--blue); }
+    .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+           font-size: 13px; font-weight: 600; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-danger  { background: var(--red);  color: #fff; }
+    .btn-yellow  { background: var(--yellow); color: #fff; }
+    .btn-ghost   { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+    .btn-sm      { padding: 6px 12px; font-size: 12px; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Layout ── */
+    .body-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      grid-template-rows: 1fr auto;
+      height: calc(100vh - 113px);
+      gap: 0;
+    }
+
+    /* ── Transcript panel ── */
+    .transcript-panel {
+      display: flex; flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--card);
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;
+    }
+    #transcript-list { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+
+    .turn { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; max-width: 85%; }
+    .turn.candidate   { background: #e8f0ff; align-self: flex-end; border-bottom-right-radius: 3px; }
+    .turn.assistant   { background: #f0f0f5; align-self: flex-start; border-bottom-left-radius: 3px; }
+    .turn.interviewer_note { background: #fff8e1; align-self: center; border: 1px dashed var(--yellow);
+                              font-size: 12px; color: #856404; max-width: 95%; text-align: center; }
+    .turn-meta { font-size: 11px; color: var(--sub); margin-top: 3px; }
+
+    /* ── Sidebar ── */
+    .sidebar-panel {
+      display: flex; flex-direction: column;
+      background: var(--bg); overflow: hidden;
+    }
+    .sidebar-section { padding: 16px; border-bottom: 1px solid var(--border); }
+    .sidebar-section h3 { font-size: 13px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase;
+                          letter-spacing: .5px; color: var(--sub); }
+
+    /* ── Session info ── */
+    .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+    .info-row span:first-child { color: var(--sub); }
+    .pill { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .pill.green  { background: #d4edda; color: #155724; }
+    .pill.yellow { background: #fff3cd; color: #856404; }
+    .pill.red    { background: #fde8e8; color: #721c24; }
+    .pill.blue   { background: #d0e4ff; color: #003d99; }
+    .pill.grey   { background: #e8e8ed; color: #555; }
+
+    /* ── Action buttons ── */
+    .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    /* ── Note compose ── */
+    .note-compose { padding: 16px; border-top: 1px solid var(--border); background: var(--card); }
+    .note-compose textarea {
+      width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: 13px; font-family: inherit; resize: none;
+      height: 70px; outline: none; margin-bottom: 8px;
+    }
+    .note-compose textarea:focus { border-color: var(--blue); }
+    .note-compose-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* ── Skills panel ── */
+    #skills-list { display: flex; flex-direction: column; gap: 7px; max-height: 200px; overflow-y: auto; }
+    .skill-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .skill-name { font-weight: 500; }
+    .prof-pill { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #e8e8ed; color: #555; }
+    .prof-pill.expert       { background: #d4edda; color: #155724; }
+    .prof-pill.advanced     { background: #d0e4ff; color: #003d99; }
+    .prof-pill.intermediate { background: #fff3cd; color: #856404; }
+    .prof-pill.beginner     { background: #fde8e8; color: #721c24; }
+
+    /* ── Score mini display ── */
+    .score-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .score-mini { text-align: center; padding: 10px; background: var(--card); border-radius: 10px; }
+    .score-mini .val { font-size: 20px; font-weight: 700; }
+    .score-mini .lbl { font-size: 11px; color: var(--sub); margin-top: 2px; }
+
+    /* ── Empty ── */
+    .empty-small { font-size: 13px; color: var(--sub); text-align: center; padding: 12px 0; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1c1c1e; color: #fff; padding: 10px 20px; border-radius: 10px;
+      font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 999;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div id="ws-dot" class="connecting"></div>
+  <h1>🎧 Interviewer Monitor</h1>
+  <span id="ws-label">Disconnected</span>
+  <a href="/recruiter">← Recruiter Portal</a>
+</header>
+
+<!-- Session picker -->
+<div class="session-bar">
+  <label>Session ID:</label>
+  <input id="session-input" placeholder="Paste session ID or use ?session=… in URL" />
+  <button class="btn btn-primary" onclick="connectSession()">Connect</button>
+  <span id="session-status" style="font-size:13px;color:var(--sub)"></span>
+</div>
+
+<div class="body-grid">
+
+  <!-- Transcript -->
+  <div class="transcript-panel">
+    <div class="panel-header">
+      <span>Live Transcript</span>
+      <span id="turn-count" style="font-size:12px;color:var(--sub);font-weight:400">0 turns</span>
+    </div>
+    <div id="transcript-list">
+      <div class="empty-small" style="margin-top:60px">Connect to a session to see the live transcript.</div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar-panel">
+
+    <!-- Session info -->
+    <div class="sidebar-section">
+      <h3>Session Info</h3>
+      <div class="info-row"><span>Stage</span>    <span id="info-stage">—</span></div>
+      <div class="info-row"><span>Status</span>   <span id="info-status">—</span></div>
+      <div class="info-row"><span>Job</span>      <span id="info-job">—</span></div>
+      <div class="info-row"><span>Started</span>  <span id="info-started">—</span></div>
+    </div>
+
+    <!-- Override actions -->
+    <div class="sidebar-section">
+      <h3>Override Controls</h3>
+      <div class="action-grid">
+        <button class="btn btn-yellow" id="btn-pause" onclick="sendAction('pause')" disabled>⏸ Pause</button>
+        <button class="btn btn-ghost"  id="btn-resume" onclick="sendAction('resume')" disabled>▶ Resume</button>
+        <button class="btn btn-danger" id="btn-end"   onclick="sendAction('end')" disabled>■ End Session</button>
+        <button class="btn btn-ghost"  id="btn-esc"   onclick="sendAction('escalate')" disabled>🚨 Escalate</button>
+      </div>
+    </div>
+
+    <!-- Skills -->
+    <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+      <h3>Extracted Skills</h3>
+      <div id="skills-list"><div class="empty-small">No skills extracted yet.</div></div>
+    </div>
+
+    <!-- Scores -->
+    <div class="sidebar-section">
+      <h3>Evaluation Scores</h3>
+      <div class="score-mini-grid" id="score-mini-grid">
+        <div class="score-mini"><div class="val" id="sc-tech">—</div><div class="lbl">Technical</div></div>
+        <div class="score-mini"><div class="val" id="sc-comm">—</div><div class="lbl">Communication</div></div>
+        <div class="score-mini"><div class="val" id="sc-ps">—</div><div class="lbl">Problem Solving</div></div>
+        <div class="score-mini"><div class="val" id="sc-cf">—</div><div class="lbl">Cultural Fit</div></div>
+      </div>
+      <div style="margin-top:10px;text-align:center">
+        <span style="font-size:11px;color:var(--sub)">Total: </span>
+        <span id="sc-total" style="font-size:18px;font-weight:700">—</span>
+        &nbsp;
+        <span id="sc-rec" style="font-size:12px"></span>
+      </div>
+    </div>
+
+    <!-- Note compose -->
+    <div class="note-compose">
+      <textarea id="note-input" placeholder="Add an interviewer note…"></textarea>
+      <div class="note-compose-actions">
+        <button class="btn btn-ghost btn-sm" onclick="sendNote()" id="btn-note" disabled>Add Note</button>
+        <button class="btn btn-primary btn-sm" onclick="fetchAll()" id="btn-refresh" disabled>↻ Refresh</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  let ws = null;
+  let currentSessionId = null;
+  let pollInterval = null;
+
+  // ── Parse session from URL ─────────────────────────────────────────────────
+  const urlSession = new URLSearchParams(location.search).get('session');
+  if (urlSession) {
+    document.getElementById('session-input').value = urlSession;
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  async function api(path, opts = {}) {
+    const r = await fetch(path, opts);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+
+  function toast(msg, ms = 2500) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), ms);
+  }
+
+  function fmt(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function stagePill(s) {
+    return `<span class="pill blue">${s || '—'}</span>`;
+  }
+
+  function statusPill(s) {
+    const map = { active: 'green', disconnected: 'grey', paused: 'yellow',
+                  ended_by_interviewer: 'blue', escalated: 'red', error: 'red' };
+    return `<span class="pill ${map[s] || 'grey'}">${s || '—'}</span>`;
+  }
+
+  function scoreColor(v) { if (v >= 70) return '#34c759'; if (v >= 50) return '#ff9500'; return '#ff3b30'; }
+
+  // ── Connect WebSocket ──────────────────────────────────────────────────────
+  function connectSession() {
+    const sid = document.getElementById('session-input').value.trim();
+    if (!sid) return alert('Enter a Session ID first.');
+    if (ws) { ws.close(); ws = null; }
+
+    currentSessionId = sid;
+    document.getElementById('session-status').textContent = 'Connecting…';
+
+    const dot   = document.getElementById('ws-dot');
+    const label = document.getElementById('ws-label');
+    dot.className = 'connecting';
+
+    ws = new WebSocket(`ws://${location.host}/ws/monitor/${sid}`);
+
+    ws.onopen = () => {
+      dot.className = 'connected';
+      label.textContent = 'Connected — ' + sid.slice(0, 12) + '…';
+      document.getElementById('session-status').textContent = 'Live';
+      enableActions(true);
+      toast('Connected to session');
+    };
+
+    ws.onclose = () => {
+      dot.className = '';
+      label.textContent = 'Disconnected';
+      document.getElementById('session-status').textContent = 'Disconnected';
+      enableActions(false);
+    };
+
+    ws.onerror = () => toast('WebSocket error', 3000);
+
+    ws.onmessage = (e) => {
+      let data;
+      try { data = JSON.parse(e.data); } catch { return; }
+
+      if (data.event === 'init') {
+        renderSession(data.session);
+        renderTranscript(data.transcript || []);
+        fetchSkills();
+        fetchEvaluation();
+        return;
+      }
+
+      if (data.event === 'interviewer_action') {
+        appendTurn({ role: 'interviewer_note', content: `[${data.action.toUpperCase()}] ${data.note || ''}`,
+                     timestamp: data.ts });
+        toast(`Action: ${data.action}`);
+        return;
+      }
+
+      // Generic event — refresh all
+      fetchAll();
+    };
+
+    // Poll skills + eval every 15 s while connected
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(() => {
+      if (currentSessionId) { fetchSkills(); fetchEvaluation(); }
+    }, 15000);
+  }
+
+  function enableActions(on) {
+    ['btn-pause','btn-resume','btn-end','btn-esc','btn-note','btn-refresh']
+      .forEach(id => document.getElementById(id).disabled = !on);
+  }
+
+  // ── Render helpers ─────────────────────────────────────────────────────────
+  function renderSession(s) {
+    document.getElementById('info-stage').innerHTML   = stagePill(s.stage);
+    document.getElementById('info-status').innerHTML  = statusPill(s.status);
+    document.getElementById('info-job').textContent   = s.job_id || '—';
+    document.getElementById('info-started').textContent = fmt(s.started_at);
+  }
+
+  function renderTranscript(turns) {
+    const list = document.getElementById('transcript-list');
+    list.innerHTML = '';
+    turns.forEach(t => appendTurn(t, false));
+    document.getElementById('turn-count').textContent =
+      turns.filter(t => t.role !== 'interviewer_note').length + ' turns';
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function appendTurn(t, scroll = true) {
+    const list = document.getElementById('transcript-list');
+    const el = document.createElement('div');
+    const role = t.role === 'assistant' ? 'assistant' : t.role === 'candidate' ? 'candidate' : 'interviewer_note';
+    el.className = `turn ${role}`;
+    el.innerHTML = `<div>${t.content}</div><div class="turn-meta">${t.role} · ${fmt(t.timestamp)}</div>`;
+    list.appendChild(el);
+    if (scroll) list.scrollTop = list.scrollHeight;
+
+    // Update turn counter
+    const all = list.querySelectorAll('.turn:not(.interviewer_note)');
+    document.getElementById('turn-count').textContent = all.length + ' turns';
+  }
+
+  function renderSkills(skills) {
+    const el = document.getElementById('skills-list');
+    if (!skills.length) { el.innerHTML = '<div class="empty-small">No skills extracted yet.</div>'; return; }
+    el.innerHTML = skills.map(s => `
+      <div class="skill-row">
+        <span class="skill-name">${s.skill_name}</span>
+        <span class="prof-pill ${s.proficiency || ''}">${s.proficiency || '—'}</span>
+      </div>`).join('');
+  }
+
+  function renderEvaluation(ev) {
+    if (!ev) return;
+    const fields = [['sc-tech', ev.technical_score], ['sc-comm', ev.communication_score],
+                    ['sc-ps',   ev.problem_solving_score], ['sc-cf', ev.cultural_fit_score]];
+    fields.forEach(([id, val]) => {
+      const el = document.getElementById(id);
+      el.textContent = val ?? '—';
+      if (val != null) el.style.color = scoreColor(val);
+    });
+    const tot = document.getElementById('sc-total');
+    tot.textContent = ev.total_score ?? '—';
+    if (ev.total_score != null) tot.style.color = scoreColor(ev.total_score);
+
+    const rec = ev.recommendation;
+    const map = { 'Strong Hire': 'green', 'Consider': 'yellow', 'Pass': 'red' };
+    document.getElementById('sc-rec').innerHTML = rec
+      ? `<span class="pill ${map[rec] || 'grey'}">${rec}</span>` : '';
+  }
+
+  // ── Fetch calls ────────────────────────────────────────────────────────────
+  async function fetchSkills() {
+    if (!currentSessionId) return;
+    try {
+      const skills = await api(`/functions/get_skills/${currentSessionId}`);
+      renderSkills(skills);
+    } catch {}
+  }
+
+  async function fetchEvaluation() {
+    if (!currentSessionId) return;
+    try {
+      const ev = await api(`/functions/get_evaluation/${currentSessionId}`);
+      renderEvaluation(ev);
+    } catch {}
+  }
+
+  async function fetchAll() {
+    if (!currentSessionId) return;
+    try {
+      const session = await api(`/functions/get_session/${currentSessionId}`);
+      renderSession(session);
+    } catch {}
+    try {
+      const transcript = await api(`/functions/get_transcript/${currentSessionId}`);
+      renderTranscript(transcript);
+    } catch {}
+    await fetchSkills();
+    await fetchEvaluation();
+  }
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+  async function sendAction(action) {
+    if (!currentSessionId) return;
+    const note = action === 'escalate'
+      ? (prompt('Reason for escalation:') || '')
+      : '';
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ action, note }));
+    } else {
+      // REST fallback
+      await api(`/admin/override/${currentSessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, note }),
+      });
+    }
+    toast(`Sent: ${action}`);
+  }
+
+  async function sendNote() {
+    const note = document.getElementById('note-input').value.trim();
+    if (!note || !currentSessionId) return;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ action: 'note', note }));
+    } else {
+      await api(`/admin/override/${currentSessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'note', note }),
+      });
+    }
+    document.getElementById('note-input').value = '';
+    toast('Note added');
+  }
+
+  // ── Auto-connect if URL has session param ──────────────────────────────────
+  if (urlSession) connectSession();
+</script>
+</body>
+</html>

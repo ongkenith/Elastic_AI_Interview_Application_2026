@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interview Results Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* Chart panel */
+    #chart-section { transition: all .3s; }
+    #chart-section.expanded {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(3,7,18,.95);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px;
+    }
+    #chart-section.expanded #chart-canvas-wrap {
+      width: 90vw; height: 70vh;
+    }
+    #chart-section.expanded #chart-expand-btn { margin-top: 20px; }
+    #chart-canvas-wrap { position: relative; width: 100%; height: 260px; }
+    .chart-dot-label { cursor: pointer; }
+    /* Candidate label legend below chart */
+    #chart-legend {
+      display: flex; flex-wrap: wrap; gap: 6px 14px;
+      margin-top: 10px; font-size: 12px;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 5px;
+      cursor: pointer; padding: 3px 8px; border-radius: 6px;
+      transition: background .15s;
+    }
+    .legend-item:hover { background: rgba(59,130,246,.12); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 mb-2">Interview Results Dashboard</h1>
+      <p class="text-gray-600">Manage your interview rooms and view candidate results</p>
+    </div>
+
+    <!-- Navigation -->
+    <div class="mb-6">
+      <nav class="flex space-x-4">
+        <button id="myRoomsTab" class="tab-button px-4 py-2 font-medium text-blue-600 border-b-2 border-blue-600">
+          My Rooms
+        </button>
+        <a href="/recruiter" class="px-4 py-2 text-gray-500 hover:text-gray-700">
+          Create New Room
+        </a>
+      </nav>
+    </div>
+
+    <!-- My Rooms Section -->
+    <div id="myRoomsSection">
+      <div class="mb-4 flex justify-between items-center">
+        <h2 class="text-xl font-semibold text-gray-900">Your Interview Rooms</h2>
+        <div class="text-sm text-gray-500">
+          Interviewer ID: <span id="interviewerIdDisplay">default_interviewer</span>
+          <button id="editInterviewerId" class="ml-2 text-blue-600 hover:text-blue-800">Edit</button>
+        </div>
+      </div>
+
+      <!-- Interviewer ID Input -->
+      <div id="interviewerIdInput" class="mb-4 hidden">
+        <div class="flex items-center space-x-2">
+          <input 
+            type="text" 
+            id="newInterviewerId" 
+            placeholder="Enter your interviewer ID"
+            class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button id="saveInterviewerId" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+            Update
+          </button>
+          <button id="cancelInterviewerId" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div id="loadingRooms" class="text-center py-8">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p class="mt-2 text-gray-600">Loading your rooms...</p>
+      </div>
+
+      <!-- Rooms Grid -->
+      <div id="roomsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 hidden">
+        <!-- Room cards will be inserted here -->
+      </div>
+
+      <!-- No Rooms Message -->
+      <div id="noRooms" class="text-center py-12 hidden">
+        <div class="text-gray-400 mb-4">
+          <svg class="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No interview rooms yet</h3>
+        <p class="text-gray-600 mb-4">Create your first interview room to get started</p>
+        <a href="/recruiter" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+          Create Room
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Room Detail Modal -->
+  <div id="roomModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen px-4">
+      <div class="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-screen overflow-hidden">
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+          <h3 id="modalTitle" class="text-lg font-semibold text-gray-900">Room Details</h3>
+          <button id="closeModal" class="text-gray-400 hover:text-gray-600">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Modal Content -->
+        <div class="px-6 py-4 overflow-y-auto" style="max-height:80vh">
+          <!-- ── Score Chart Section ── -->
+          <div id="chart-section" class="mb-5 bg-gray-50 rounded-xl p-4 border border-gray-200">
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <h4 class="font-semibold text-gray-800 text-sm">📊 Candidate Score Chart</h4>
+                <p class="text-xs text-gray-500 mt-0.5">Click a bar or name to view candidate details</p>
+              </div>
+              <button id="chart-expand-btn"
+                onclick="toggleChartExpand()"
+                class="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded-md text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-colors font-medium">
+                ⤢ Expand
+              </button>
+            </div>
+            <div id="chart-canvas-wrap">
+              <canvas id="scoreChart"></canvas>
+            </div>
+            <div id="chart-legend"></div>
+          </div>
+          <!-- ── Room detail content ── -->
+          <div id="modalContent">
+            <!-- Content will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+          <button id="deleteRoomBtn" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+            Delete Room
+          </button>
+          <button id="closeModalBtn" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Candidate Detail Modal -->
+  <div id="candidateModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen px-4">
+      <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-screen overflow-hidden">
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+          <h3 id="candidateModalTitle" class="text-lg font-semibold text-gray-900">Candidate Details</h3>
+          <button id="closeCandidateModal" class="text-gray-400 hover:text-gray-600">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Modal Content -->
+        <div class="px-6 py-4 max-h-96 overflow-y-auto">
+          <div id="candidateModalContent">
+            <!-- Content will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 border-t border-gray-200 flex justify-end">
+          <button id="closeCandidateModalBtn" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State management
+    let currentInterviewerId = localStorage.getItem('interviewerId') || 'default_interviewer';
+    let currentRooms = [];
+    let selectedRoom = null;
+    let _scoreChart = null;           // Chart.js instance
+    let _chartExpanded = false;       // expand state
+    let _chartCandidateIds = [];      // parallel array mapping bar index → candidate_id
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      updateInterviewerIdDisplay();
+      loadMyRooms();
+      setupEventListeners();
+    });
+
+    function setupEventListeners() {
+      // Interviewer ID management
+      document.getElementById('editInterviewerId').addEventListener('click', showInterviewerIdInput);
+      document.getElementById('saveInterviewerId').addEventListener('click', saveInterviewerId);
+      document.getElementById('cancelInterviewerId').addEventListener('click', hideInterviewerIdInput);
+
+      // Modal management
+      document.getElementById('closeModal').addEventListener('click', closeRoomModal);
+      document.getElementById('closeModalBtn').addEventListener('click', closeRoomModal);
+      document.getElementById('closeCandidateModal').addEventListener('click', closeCandidateModal);
+      document.getElementById('closeCandidateModalBtn').addEventListener('click', closeCandidateModal);
+      
+      // Delete room
+      document.getElementById('deleteRoomBtn').addEventListener('click', deleteCurrentRoom);
+
+      // Enter key for interviewer ID
+      document.getElementById('newInterviewerId').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          saveInterviewerId();
+        }
+      });
+    }
+
+    function updateInterviewerIdDisplay() {
+      document.getElementById('interviewerIdDisplay').textContent = currentInterviewerId;
+    }
+
+    function showInterviewerIdInput() {
+      document.getElementById('newInterviewerId').value = currentInterviewerId;
+      document.getElementById('interviewerIdInput').classList.remove('hidden');
+    }
+
+    function hideInterviewerIdInput() {
+      document.getElementById('interviewerIdInput').classList.add('hidden');
+    }
+
+    function saveInterviewerId() {
+      const newId = document.getElementById('newInterviewerId').value.trim();
+      if (newId) {
+        currentInterviewerId = newId;
+        localStorage.setItem('interviewerId', currentInterviewerId);
+        updateInterviewerIdDisplay();
+        hideInterviewerIdInput();
+        loadMyRooms(); // Reload with new ID
+      }
+    }
+
+    async function loadMyRooms() {
+      showLoading();
+      try {
+        const response = await fetch(`/api/interviewer/${encodeURIComponent(currentInterviewerId)}/rooms`);
+        if (response.ok) {
+          const data = await response.json();
+          currentRooms = data.rooms || [];
+          displayRooms();
+        } else {
+          console.error('Failed to load rooms');
+          showNoRooms();
+        }
+      } catch (error) {
+        console.error('Error loading rooms:', error);
+        showNoRooms();
+      }
+    }
+
+    function showLoading() {
+      document.getElementById('loadingRooms').classList.remove('hidden');
+      document.getElementById('roomsGrid').classList.add('hidden');
+      document.getElementById('noRooms').classList.add('hidden');
+    }
+
+    function displayRooms() {
+      document.getElementById('loadingRooms').classList.add('hidden');
+      
+      if (currentRooms.length === 0) {
+        showNoRooms();
+        return;
+      }
+
+      const grid = document.getElementById('roomsGrid');
+      grid.innerHTML = '';
+      grid.classList.remove('hidden');
+
+      currentRooms.forEach(room => {
+        const card = createRoomCard(room);
+        grid.appendChild(card);
+      });
+    }
+
+    function showNoRooms() {
+      document.getElementById('loadingRooms').classList.add('hidden');
+      document.getElementById('roomsGrid').classList.add('hidden');
+      document.getElementById('noRooms').classList.remove('hidden');
+    }
+
+    function createRoomCard(room) {
+      const card = document.createElement('div');
+      card.className = 'bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer';
+      card.onclick = () => openRoomDetails(room.room_code);
+
+      const createdDate = new Date(room.created_at).toLocaleDateString();
+      
+      card.innerHTML = `
+        <div class="flex justify-between items-start mb-3">
+          <h3 class="text-lg font-semibold text-gray-900 truncate">${escapeHtml(room.title)}</h3>
+          <span class="text-xs font-medium px-2 py-1 rounded-full ${room.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+            ${room.active ? 'Active' : 'Inactive'}
+          </span>
+        </div>
+        <p class="text-gray-600 text-sm mb-4 line-clamp-2">${escapeHtml(room.description.substring(0, 100))}${room.description.length > 100 ? '...' : ''}</p>
+        <div class="space-y-2 text-sm text-gray-500">
+          <div class="flex justify-between">
+            <span>Room Code:</span>
+            <span class="font-mono font-medium">${room.room_code}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Candidates:</span>
+            <span class="font-medium">${room.candidate_count}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Created:</span>
+            <span>${createdDate}</span>
+          </div>
+          ${room.department ? `<div class="flex justify-between"><span>Department:</span><span>${escapeHtml(room.department)}</span></div>` : ''}
+        </div>
+        <div class="mt-4 pt-4 border-t border-gray-200">
+          <button class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors">
+            View Results
+          </button>
+        </div>
+      `;
+      
+      return card;
+    }
+
+    async function openRoomDetails(roomCode) {
+      document.getElementById('modalTitle').textContent = `Room ${roomCode} - Results`;
+      document.getElementById('roomModal').classList.remove('hidden');
+      
+      // Store current room for delete function
+      selectedRoom = roomCode;
+      
+      // Load room results
+      document.getElementById('modalContent').innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div><p class="mt-2">Loading results...</p></div>';
+      
+      try {
+        const response = await fetch(`/api/rooms/${roomCode}/results`);
+        if (response.ok) {
+          const data = await response.json();
+          displayRoomResults(data);
+        } else {
+          document.getElementById('modalContent').innerHTML = '<p class="text-red-600">Failed to load room results.</p>';
+        }
+      } catch (error) {
+        console.error('Error loading room results:', error);
+        document.getElementById('modalContent').innerHTML = '<p class="text-red-600">Error loading room results.</p>';
+      }
+    }
+
+    // ── Sort / filter state ────────────────────────────────────────────────────
+    let _roomCandidates = [];
+
+    function _getCandidateScore(cd) {
+      const ev = (cd.sessions.find(s => s.evaluation) || cd.sessions[0])?.evaluation;
+      return ev ? (ev.overall_score ?? ev.total_score ?? 0) : -1;
+    }
+    function _getCandidateRec(cd) {
+      const ev = (cd.sessions.find(s => s.evaluation) || cd.sessions[0])?.evaluation;
+      return ev ? (ev.recommendation || '') : '';
+    }
+
+    function _filterGroup(rec) {
+      if (['STRONG_HIRE','HIRE'].includes(rec)) return 'hire';
+      if (rec === 'NEUTRAL') return 'neutral';
+      if (['PASS','STRONG_PASS'].includes(rec)) return 'pass';
+      return 'pending';
+    }
+
+    function renderCandidateList() {
+      const sort   = document.getElementById('cand-sort')?.value   || 'score-desc';
+      const filter = document.getElementById('cand-filter')?.value || 'all';
+
+      let list = [..._roomCandidates];
+
+      // Filter
+      if (filter !== 'all') {
+        list = list.filter(cd => _filterGroup(_getCandidateRec(cd)) === filter);
+      }
+
+      // Sort
+      if (sort === 'score-desc') {
+        list.sort((a, b) => _getCandidateScore(b) - _getCandidateScore(a));
+      } else if (sort === 'score-asc') {
+        list.sort((a, b) => _getCandidateScore(a) - _getCandidateScore(b));
+      } else if (sort === 'name-asc') {
+        list.sort((a, b) => (a.candidate.name || '').localeCompare(b.candidate.name || ''));
+      } else if (sort === 'name-desc') {
+        list.sort((a, b) => (b.candidate.name || '').localeCompare(a.candidate.name || ''));
+      }
+
+      const countEl = document.getElementById('cand-count');
+      if (countEl) countEl.textContent = `${list.length} candidate${list.length !== 1 ? 's' : ''}`;
+
+      const listEl = document.getElementById('cand-list');
+      if (!listEl) return;
+      if (list.length === 0) {
+        listEl.innerHTML = '<p class="text-gray-500 text-center py-8">No candidates match this filter.</p>';
+      } else {
+        listEl.innerHTML = `<div class="space-y-3">${list.map(createCandidateResultCard).join('')}</div>`;
+      }
+
+      // Re-attach click listeners
+      listEl.querySelectorAll('[data-candidate-id]').forEach(card => {
+        card.addEventListener('click', function() {
+          openCandidateDetails(this.getAttribute('data-candidate-id'));
+        });
+      });
+    }
+
+    // ── Chart helpers ─────────────────────────────────────────────────────────
+    function _scoreColor(score) {
+      if (score >= 80) return 'rgba(34,197,94,.85)';
+      if (score >= 60) return 'rgba(234,179,8,.85)';
+      return 'rgba(239,68,68,.85)';
+    }
+
+    function buildScoreChart(candidates) {
+      // Destroy previous chart if any
+      if (_scoreChart) { _scoreChart.destroy(); _scoreChart = null; }
+
+      // Collect data — only evaluated candidates (pending = 0)
+      const items = candidates.map(cd => {
+        const ev = (cd.sessions.find(s => s.evaluation) || cd.sessions[0])?.evaluation;
+        const score = ev ? (ev.overall_score ?? ev.total_score ?? 0) : 0;
+        return { name: cd.candidate.name || 'Unknown', score, id: cd.candidate.candidate_id };
+      });
+
+      _chartCandidateIds = items.map(i => i.id);
+
+      const labels  = items.map(i => i.name.split(' ')[0]);   // first name only on axis
+      const scores  = items.map(i => i.score);
+      const colors  = scores.map(_scoreColor);
+
+      const canvas = document.getElementById('scoreChart');
+      if (!canvas) return;
+
+      _scoreChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Score',
+            data: scores,
+            backgroundColor: colors,
+            borderColor: colors.map(c => c.replace('.85)', '1)')),
+            borderWidth: 2,
+            borderRadius: 6,
+            borderSkipped: false,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          onClick: (evt, elements) => {
+            if (elements.length > 0) {
+              const idx = elements[0].index;
+              const cid = _chartCandidateIds[idx];
+              if (cid) openCandidateDetails(cid);
+            }
+          },
+          onHover: (evt, elements) => {
+            canvas.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: ctx => items[ctx[0].dataIndex].name,
+                label: ctx => ` Score: ${ctx.raw}/100`,
+              }
+            }
+          },
+          scales: {
+            y: {
+              min: 0, max: 100,
+              ticks: { color: '#6b7280', font: { size: 11 } },
+              grid:  { color: 'rgba(107,114,128,.15)' },
+            },
+            x: {
+              ticks: { color: '#6b7280', font: { size: 11 }, maxRotation: 35 },
+              grid:  { display: false },
+            }
+          }
+        }
+      });
+
+      // Build clickable legend with full names
+      const legend = document.getElementById('chart-legend');
+      if (legend) {
+        legend.innerHTML = items.map((item, idx) => `
+          <div class="legend-item" onclick="openCandidateDetails('${item.id}')" title="View ${item.name}">
+            <div class="legend-dot" style="background:${colors[idx]}"></div>
+            <span class="text-gray-700 font-medium">${escapeHtml(item.name)}</span>
+            <span class="text-gray-400">${item.score > 0 ? item.score + '/100' : 'pending'}</span>
+          </div>`).join('');
+      }
+    }
+
+    function toggleChartExpand() {
+      const section = document.getElementById('chart-section');
+      const btn     = document.getElementById('chart-expand-btn');
+      _chartExpanded = !_chartExpanded;
+      if (_chartExpanded) {
+        section.classList.add('expanded');
+        btn.textContent = '✕ Close';
+        // Allow ESC to collapse
+        document.addEventListener('keydown', _escCollapseChart);
+      } else {
+        section.classList.remove('expanded');
+        btn.textContent = '⤢ Expand';
+        document.removeEventListener('keydown', _escCollapseChart);
+      }
+      if (_scoreChart) _scoreChart.resize();
+    }
+
+    function _escCollapseChart(e) {
+      if (e.key === 'Escape' && _chartExpanded) toggleChartExpand();
+    }
+
+    // ── Room results display ──────────────────────────────────────────────────
+    function displayRoomResults(data) {
+      const { room, candidates, total_candidates } = data;
+      _roomCandidates = candidates;
+
+      // Build chart first (async-safe, runs after innerHTML is set below)
+      setTimeout(() => buildScoreChart(candidates), 50);
+
+      const html = `
+        <div class="space-y-6">
+          <!-- Room Info -->
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="font-semibold text-gray-900 mb-2">${escapeHtml(room.title)}</h4>
+            <p class="text-gray-600 text-sm mb-3">${escapeHtml(room.description)}</p>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div><span class="text-gray-500">Room Code:</span> <span class="font-mono">${room.room_code}</span></div>
+              <div><span class="text-gray-500">Total Candidates:</span> ${total_candidates}</div>
+              ${room.department ? `<div><span class="text-gray-500">Department:</span> ${escapeHtml(room.department)}</div>` : ''}
+              ${room.location ? `<div><span class="text-gray-500">Location:</span> ${escapeHtml(room.location)}</div>` : ''}
+            </div>
+          </div>
+
+          <!-- Required Skills -->
+          ${room.required_skills && room.required_skills.length > 0 ? `
+          <div>
+            <h5 class="font-medium text-gray-900 mb-2">Required Skills</h5>
+            <div class="flex flex-wrap gap-2">
+              ${room.required_skills.map(s => `<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">${escapeHtml(s)}</span>`).join('')}
+            </div>
+          </div>` : ''}
+
+          <!-- Candidates List -->
+          <div>
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <h5 class="font-medium text-gray-900">Candidates &amp; Results</h5>
+              <span id="cand-count" class="text-xs text-gray-400"></span>
+            </div>
+
+            ${candidates.length === 0 ? `
+              <p class="text-gray-500 text-center py-8">No candidates have joined this room yet.</p>
+            ` : `
+              <!-- Sort & filter toolbar -->
+              <div class="flex flex-wrap gap-2 mb-4">
+                <select id="cand-sort" onchange="renderCandidateList()"
+                  class="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                  <option value="score-desc">⬇ Highest Score</option>
+                  <option value="score-asc">⬆ Lowest Score</option>
+                  <option value="name-asc">A → Z</option>
+                  <option value="name-desc">Z → A</option>
+                </select>
+                <select id="cand-filter" onchange="renderCandidateList()"
+                  class="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                  <option value="all">All Candidates</option>
+                  <option value="hire">✅ Hire (Strong Hire / Hire)</option>
+                  <option value="neutral">🟡 Neutral</option>
+                  <option value="pass">❌ Pass (Pass / Strong Pass)</option>
+                  <option value="pending">⏳ Pending Evaluation</option>
+                </select>
+              </div>
+              <div id="cand-list"></div>
+            `}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('modalContent').innerHTML = html;
+
+      if (candidates.length > 0) renderCandidateList();
+    }
+
+    // Reset chart state when modal closes
+    function _resetChart() {
+      if (_scoreChart) { _scoreChart.destroy(); _scoreChart = null; }
+      _chartCandidateIds = [];
+      const legend = document.getElementById('chart-legend');
+      if (legend) legend.innerHTML = '';
+      if (_chartExpanded) toggleChartExpand();
+    }
+
+    function createCandidateResultCard(candidateData) {
+      const { candidate, sessions, session_count } = candidateData;
+      
+      // Get the latest evaluation if available
+      const latestSession = sessions.find(s => s.evaluation) || sessions[0];
+      const sessionId = latestSession?.session?.session_id || '';
+      const evaluation = latestSession?.evaluation;
+      
+      let statusBadge = '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">Pending Evaluation</span>';
+      if (evaluation) {
+        const score = evaluation.overall_score ?? evaluation.total_score ?? 0;
+        const rec = evaluation.recommendation || '';
+        const badgeClass = recBadgeClass(rec, score);
+        const label = rec ? rec.replace(/_/g, ' ') : `${score}/100`;
+        statusBadge = `<span class="px-2 py-1 ${badgeClass} text-xs rounded-full font-semibold">${label}</span>`;
+      }
+
+      const evalSection = evaluation ? (() => {
+        const score = evaluation.overall_score ?? evaluation.total_score ?? 0;
+        return `
+          <div class="mt-3 space-y-1">
+            <div class="flex justify-between text-xs text-gray-500 mb-1">
+              <span>Overall Score</span><span class="font-bold text-gray-800">${score}/100</span>
+            </div>
+            <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div class="h-full rounded-full ${scoreBarColor(score)}" style="width:${score}%"></div>
+            </div>
+            ${evaluation.summary ? `<p class="text-xs text-gray-500 mt-2 line-clamp-2">${escapeHtml((evaluation.summary || '').substring(0, 140))}</p>` : ''}
+          </div>`;
+      })() : '';
+
+      return `
+        <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors" data-candidate-id="${candidate.candidate_id}">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <h6 class="font-medium text-gray-900">${escapeHtml(candidate.name)}</h6>
+              <p class="text-sm text-gray-500">${escapeHtml(candidate.email)}</p>
+            </div>
+            ${statusBadge}
+          </div>
+          <div class="text-xs text-gray-400 space-x-3">
+            <span>${session_count} session${session_count !== 1 ? 's' : ''}</span>
+            <span>·</span>
+            <span>Joined ${new Date(candidate.created_at).toLocaleDateString()}</span>
+          </div>
+          ${evalSection}
+          ${sessionId ? `
+          <div class="mt-3 flex gap-2" onclick="event.stopPropagation()">
+            <a href="/api/recordings/${sessionId}" target="_blank"
+               class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 hover:text-blue-600 hover:border-blue-400 transition-colors no-underline"
+               title="Watch interview recording">
+              ▶ Recording
+            </a>
+            <a href="/api/cv/${sessionId}" target="_blank"
+               class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 hover:text-blue-600 hover:border-blue-400 transition-colors no-underline"
+               title="View candidate CV">
+              📄 CV
+            </a>
+          </div>` : ''}
+        </div>
+      `;
+    }
+
+    async function openCandidateDetails(candidateId) {
+      document.getElementById('candidateModalTitle').textContent = 'Candidate Details';
+      document.getElementById('candidateModal').classList.remove('hidden');
+      
+      document.getElementById('candidateModalContent').innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div><p class="mt-2">Loading candidate details...</p></div>';
+      
+      try {
+        const response = await fetch(`/api/candidates/${candidateId}/details`);
+        if (response.ok) {
+          const data = await response.json();
+          displayCandidateDetails(data);
+        } else {
+          document.getElementById('candidateModalContent').innerHTML = '<p class="text-red-600">Failed to load candidate details.</p>';
+        }
+      } catch (error) {
+        console.error('Error loading candidate details:', error);
+        document.getElementById('candidateModalContent').innerHTML = '<p class="text-red-600">Error loading candidate details.</p>';
+      }
+    }
+
+    function displayCandidateDetails(data) {
+      const { candidate, job, sessions, total_sessions } = data;
+      
+      let html = `
+        <div class="space-y-6">
+          <!-- Candidate Info -->
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <div class="flex justify-between items-start mb-3">
+              <div>
+                <h4 class="font-semibold text-gray-900">${escapeHtml(candidate.name)}</h4>
+                <p class="text-gray-600">${escapeHtml(candidate.email)}</p>
+              </div>
+              <span class="text-sm text-gray-500">ID: ${candidate.candidate_id}</span>
+            </div>
+            ${candidate.resume_text ? `
+              <div>
+                <h5 class="font-medium text-gray-700 mb-1">Resume</h5>
+                <p class="text-sm text-gray-600">${escapeHtml(candidate.resume_text.substring(0, 300))}${candidate.resume_text.length > 300 ? '...' : ''}</p>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Job Info -->
+          ${job.title ? `
+          <div class="bg-blue-50 p-4 rounded-lg">
+            <h5 class="font-medium text-gray-900 mb-2">Applied Position</h5>
+            <p class="font-medium">${escapeHtml(job.title)}</p>
+            ${job.room_code ? `<p class="text-sm text-gray-600 mt-1">Room: ${job.room_code}</p>` : ''}
+          </div>
+          ` : ''}
+
+          <!-- Interview Sessions -->
+          <div>
+            <h5 class="font-medium text-gray-900 mb-3">Interview Sessions (${total_sessions})</h5>
+            ${sessions.length === 0 ? `
+              <p class="text-gray-500 text-center py-4">No interview sessions yet.</p>
+            ` : `
+              <div class="space-y-4">
+                ${sessions.map((sessionData, index) => createSessionCard(sessionData, index + 1)).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('candidateModalContent').innerHTML = html;
+    }
+
+    function createSessionCard(sessionData, sessionNumber) {
+      const { session, evaluation, transcript, transcript_length } = sessionData;
+      const sessId = session.session_id;
+      
+      // ── Evaluation section ──
+      let evaluationSection = `
+        <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
+          <span class="text-sm text-yellow-700">No evaluation yet</span>
+          <button onclick="reEvaluate('${sessId}', this)" class="text-xs px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+            ▶ Run Evaluation
+          </button>
+        </div>`;
+
+      if (evaluation) {
+        const overall  = evaluation.overall_score ?? evaluation.total_score ?? 0;
+        const tech     = evaluation.technical_score ?? 0;
+        const comm     = evaluation.communication_score ?? 0;
+        const ps       = evaluation.problem_solving_score ?? 0;
+        const cf       = evaluation.cultural_fit_score ?? 0;
+        const rec      = evaluation.recommendation || '';
+        const src      = evaluation.source ? `<span class="text-xs text-gray-400">(${evaluation.source})</span>` : '';
+
+        const dims = [
+          { label: 'Technical',       val: tech,    color: 'bg-blue-500'   },
+          { label: 'Communication',   val: comm,    color: 'bg-green-500'  },
+          { label: 'Problem Solving', val: ps,      color: 'bg-purple-500' },
+          { label: 'Cultural Fit',    val: cf,      color: 'bg-orange-400' },
+        ];
+
+        const dimBars = dims.map(d => `
+          <div>
+            <div class="flex justify-between text-xs text-gray-500 mb-0.5">
+              <span>${d.label}</span><span>${d.val}/100</span>
+            </div>
+            <div class="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div class="h-full rounded-full ${d.color}" style="width:${d.val}%"></div>
+            </div>
+          </div>`).join('');
+
+        const strengthsHtml = (evaluation.strengths || []).length
+          ? `<div class="mt-3"><p class="text-xs font-semibold text-green-700 mb-1">✓ Strengths</p><ul class="text-xs text-gray-600 space-y-0.5 list-disc list-inside">${(evaluation.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul></div>`
+          : '';
+        const weaknessesHtml = (evaluation.weaknesses || []).length
+          ? `<div class="mt-2"><p class="text-xs font-semibold text-red-700 mb-1">⚠ Gaps</p><ul class="text-xs text-gray-600 space-y-0.5 list-disc list-inside">${(evaluation.weaknesses || []).map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+          : '';
+
+        evaluationSection = `
+          <div class="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl font-bold ${overall >= 70 ? 'text-green-600' : overall >= 55 ? 'text-yellow-600' : 'text-red-500'}">${overall}</span>
+                <span class="text-xs text-gray-400">/100</span>
+                <span class="px-2 py-0.5 text-xs font-bold rounded-full ${recBadgeClass(rec, overall)}">${rec.replace(/_/g, ' ')}</span>
+                ${src}
+              </div>
+              <button onclick="reEvaluate('${sessId}', this)" class="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded hover:bg-gray-300">
+                ↺ Re-evaluate
+              </button>
+            </div>
+            ${evaluation.summary ? `<p class="text-xs text-gray-600 italic">${escapeHtml(evaluation.summary)}</p>` : ''}
+            <div class="space-y-2">${dimBars}</div>
+            ${strengthsHtml}${weaknessesHtml}
+          </div>`;
+      }
+
+      // ── Transcript accordion ──
+      let transcriptSection = '';
+      if (transcript && transcript.length > 0) {
+        const rows = transcript.map(t => {
+          const isAI   = t.role === 'assistant';
+          const isNote = t.role === 'interviewer_note';
+          const alignCls = isAI ? 'items-start' : isNote ? 'items-center' : 'items-end';
+          const bubbleStyle = isAI
+            ? 'background:#e8f0ff;border-radius:12px 12px 12px 3px;max-width:80%'
+            : isNote
+            ? 'background:#fff8e1;border:1px dashed #fbbf24;max-width:95%;font-size:11px;color:#856404;border-radius:8px'
+            : 'background:#3b82f6;color:#fff;border-radius:12px 12px 3px 12px;max-width:80%';
+          const icon = isAI ? '🤖' : isNote ? '🗒️' : '👤';
+          const ts = t.timestamp ? new Date(t.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+          return `<div class="flex flex-col ${alignCls} gap-0.5">
+            <div class="flex items-center gap-1 text-xs text-gray-400">${isAI ? `${icon} AI` : isNote ? `${icon} Note` : `${icon} Candidate`} ${ts ? `· ${ts}` : ''}</div>
+            <div style="${bubbleStyle};padding:8px 12px;font-size:13px;line-height:1.5">${escapeHtml(t.content)}</div>
+          </div>`;
+        }).join('');
+
+        transcriptSection = `
+          <details class="mt-3">
+            <summary class="text-xs font-semibold text-blue-600 cursor-pointer select-none hover:text-blue-800 py-1">
+              💬 View Full Transcript (${transcript.length} turns)
+            </summary>
+            <div class="mt-2 p-3 bg-white border border-gray-200 rounded-lg max-h-80 overflow-y-auto space-y-3">
+              ${rows}
+            </div>
+          </details>`;
+      }
+
+      const statusCls = session.status === 'completed' ? 'bg-green-100 text-green-700'
+                      : session.status === 'active'    ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-100 text-gray-600';
+
+      return `
+        <div class="border border-gray-200 rounded-lg p-4">
+          <div class="flex justify-between items-center mb-1">
+            <h6 class="font-medium text-gray-900">Session ${sessionNumber}</h6>
+            <span class="text-xs px-2 py-0.5 rounded-full ${statusCls}">${session.status || 'unknown'}</span>
+          </div>
+          <div class="text-xs text-gray-500 space-x-3">
+            <span>${new Date(session.started_at).toLocaleString()}</span>
+            ${transcript_length > 0 ? `<span>· ${transcript_length} messages</span>` : ''}
+          </div>
+          ${evaluationSection}
+          ${transcriptSection}
+        </div>
+      `;
+    }
+
+    // ── Re-evaluate helper ────────────────────────────────────────────────
+    async function reEvaluate(sessionId, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Running…';
+      try {
+        const r = await fetch(`/api/evaluate/${sessionId}`, { method: 'POST' });
+        if (r.ok) {
+          btn.textContent = '✓ Queued';
+          // Poll until done
+          let attempts = 0;
+          const poll = setInterval(async () => {
+            attempts++;
+            const s = await fetch(`/api/evaluate/${sessionId}`);
+            const d = await s.json();
+            if (d.status === 'complete' || attempts >= 20) {
+              clearInterval(poll);
+              btn.textContent = '✓ Done — refresh to see';
+            }
+          }, 3000);
+        } else {
+          btn.textContent = '⚠ Failed';
+          btn.disabled = false;
+        }
+      } catch {
+        btn.textContent = '⚠ Error';
+        btn.disabled = false;
+      }
+    }
+
+    // ── Colour helpers ──────────────────────────────────────────────────
+    function recBadgeClass(rec, score) {
+      if (rec === 'STRONG_HIRE')  return 'bg-green-200 text-green-900';
+      if (rec === 'HIRE')         return 'bg-green-100 text-green-800';
+      if (rec === 'NEUTRAL')      return 'bg-yellow-100 text-yellow-800';
+      if (rec === 'PASS')         return 'bg-red-100 text-red-700';
+      if (rec === 'STRONG_PASS')  return 'bg-red-200 text-red-900';
+      if (score >= 80) return 'bg-green-100 text-green-800';
+      if (score >= 60) return 'bg-yellow-100 text-yellow-800';
+      return 'bg-red-100 text-red-700';
+    }
+    function scoreBarColor(score) {
+      if (score >= 80) return 'bg-green-500';
+      if (score >= 60) return 'bg-yellow-400';
+      return 'bg-red-400';
+    }
+
+    async function deleteCurrentRoom() {
+      if (!selectedRoom) return;
+      
+      if (!confirm(`Are you sure you want to delete room ${selectedRoom}? This will permanently remove all associated data including candidates and evaluations.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/rooms/${selectedRoom}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          closeRoomModal();
+          loadMyRooms(); // Reload the rooms list
+          alert('Room deleted successfully');
+        } else {
+          const error = await response.json();
+          alert(`Failed to delete room: ${error.detail || 'Unknown error'}`);
+        }
+      } catch (error) {
+        console.error('Error deleting room:', error);
+        alert('Error deleting room');
+      }
+    }
+
+    function closeRoomModal() {
+      document.getElementById('roomModal').classList.add('hidden');
+      selectedRoom = null;
+      _resetChart();
+    }
+
+    function closeCandidateModal() {
+      document.getElementById('candidateModal').classList.add('hidden');
+    }
+
+    function escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, m => map[m]);
+    }
+  </script>
+</body>
+</html>

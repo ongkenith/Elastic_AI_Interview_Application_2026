@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recruiter Portal — AI Interview System</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f5f7; --card: #fff; --border: #e2e2e7;
+      --blue: #0066ff; --blue-dark: #0040cc;
+      --green: #34c759; --yellow: #ff9500; --red: #ff3b30;
+      --text: #1d1d1f; --sub: #6e6e73;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; background: #1c1c1e; color: #fff; display: flex;
+               flex-direction: column; padding: 24px 0; flex-shrink: 0; }
+    .sidebar-logo { padding: 0 20px 24px; font-size: 16px; font-weight: 700;
+                    border-bottom: 1px solid #333; }
+    .sidebar-logo span { color: var(--blue); }
+    .nav-item { padding: 12px 20px; cursor: pointer; font-size: 14px;
+                display: flex; align-items: center; gap: 10px; transition: background .15s;
+                border-left: 3px solid transparent; }
+    .nav-item:hover  { background: #2c2c2e; }
+    .nav-item.active { background: #2c2c2e; border-left-color: var(--blue); color: #fff; }
+    .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+    /* ── Main ── */
+    .main { flex: 1; padding: 32px; overflow-y: auto; }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .page-sub { font-size: 14px; color: var(--sub); margin-bottom: 24px; }
+
+    /* ── Cards ── */
+    .card { background: var(--card); border-radius: 14px; padding: 24px;
+            box-shadow: 0 1px 8px rgba(0,0,0,.07); margin-bottom: 20px; }
+
+    /* ── Stat grid ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-box { background: var(--card); border-radius: 14px; padding: 20px;
+                box-shadow: 0 1px 8px rgba(0,0,0,.07); }
+    .stat-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-value { font-size: 28px; font-weight: 700; }
+    .stat-value.blue   { color: var(--blue); }
+    .stat-value.green  { color: var(--green); }
+    .stat-value.yellow { color: var(--yellow); }
+    .stat-value.red    { color: var(--red); }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: left; padding: 10px 14px; background: var(--bg);
+         font-size: 12px; font-weight: 600; color: var(--sub);
+         letter-spacing: .4px; text-transform: uppercase; }
+    td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+
+    /* ── Pills ── */
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 20px;
+            font-size: 12px; font-weight: 600; }
+    .pill.green  { background: #d4edda; color: #155724; }
+    .pill.yellow { background: #fff3cd; color: #856404; }
+    .pill.red    { background: #fde8e8; color: #721c24; }
+    .pill.blue   { background: #d0e4ff; color: #003d99; }
+    .pill.grey   { background: #e8e8ed; color: #555; }
+
+    /* ── Buttons ── */
+    .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+           font-size: 13px; font-weight: 600; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-danger  { background: var(--red);  color: #fff; }
+    .btn-ghost   { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+    .btn-sm      { padding: 5px 10px; font-size: 12px; }
+
+    /* ── Forms ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    label { font-size: 13px; font-weight: 600; }
+    input[type=text], input[type=email], textarea, select {
+      padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+      font-size: 14px; font-family: inherit; outline: none; transition: border-color .2s; }
+    input:focus, textarea:focus, select:focus { border-color: var(--blue); }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* ── Modal ── */
+    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+                z-index: 200; align-items: center; justify-content: center; padding: 24px; }
+    .modal-bg.open { display: flex; }
+    .modal { background: #fff; border-radius: 16px; max-width: 580px; width: 100%;
+             padding: 32px; max-height: 90vh; overflow-y: auto;
+             box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+    .modal h3 { font-size: 18px; margin-bottom: 20px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+
+    /* ── Score bar ── */
+    .score-bar-wrap { display: flex; align-items: center; gap: 10px; }
+    .score-bar { height: 6px; border-radius: 3px; background: #e8e8ed; flex: 1; overflow: hidden; }
+    .score-bar-fill { height: 100%; border-radius: 3px; background: var(--blue); transition: width .4s; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 60px 20px; color: var(--sub); }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+    /* ── Top bar ── */
+    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+    .topbar-actions { display: flex; gap: 10px; }
+
+    /* ── Refresh indicator ── */
+    .refresh-note { font-size: 12px; color: var(--sub); }
+
+    /* ── Score detail grid ── */
+    .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+    .score-item label { font-size: 12px; color: var(--sub); margin-bottom: 4px; display: block; }
+    .score-num { font-size: 20px; font-weight: 700; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">AI <span>Interview</span></div>
+    <div class="nav-item active" onclick="showPage('dashboard')">
+      <span class="nav-icon">📊</span> Dashboard
+    </div>
+    <div class="nav-item" onclick="showPage('jobs')">
+      <span class="nav-icon">💼</span> Jobs
+    </div>
+    <div class="nav-item" onclick="showPage('sessions')">
+      <span class="nav-icon">🎙️</span> Sessions
+    </div>
+    <div class="nav-item" onclick="showPage('candidates')">
+      <span class="nav-icon">👤</span> Candidates
+    </div>
+    <div class="nav-item" onclick="showPage('evaluations')">
+      <span class="nav-icon">📋</span> Evaluations
+    </div>
+    <div class="nav-item" onclick="showPage('bias')">
+      <span class="nav-icon">⚠️</span> Bias Alerts
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- ── Dashboard ── -->
+    <div id="page-dashboard" class="page active">
+      <div class="topbar">
+        <div><h2>Dashboard</h2><p class="page-sub">Live overview of your interview pipeline</p></div>
+        <div class="topbar-actions">
+          <span class="refresh-note" id="dash-refresh-note"></span>
+          <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">↻ Refresh</button>
+          <a href="/interviewer" target="_blank"><button class="btn btn-primary btn-sm">🎧 Interviewer View</button></a>
+        </div>
+      </div>
+      <div class="stat-grid" id="stat-grid">
+        <div class="stat-box"><div class="stat-label">Total Sessions</div><div class="stat-value blue" id="st-sessions">—</div></div>
+        <div class="stat-box"><div class="stat-label">Evaluations</div><div class="stat-value" id="st-evals">—</div></div>
+        <div class="stat-box"><div class="stat-label">Avg Total Score</div><div class="stat-value green" id="st-avg">—</div></div>
+        <div class="stat-box"><div class="stat-label">Strong Hire</div><div class="stat-value green" id="st-hire">—</div></div>
+        <div class="stat-box"><div class="stat-label">Consider</div><div class="stat-value yellow" id="st-consider">—</div></div>
+        <div class="stat-box"><div class="stat-label">Pass</div><div class="stat-value red" id="st-pass">—</div></div>
+        <div class="stat-box"><div class="stat-label">High Bias Alerts</div><div class="stat-value red" id="st-bias">—</div></div>
+        <div class="stat-box"><div class="stat-label">Active Now</div><div class="stat-value blue" id="st-active">—</div></div>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:600;margin-bottom:16px">Score Breakdown (Averages)</h3>
+        <div id="score-breakdown"></div>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:600;margin-bottom:16px">Sessions by Stage</h3>
+        <div id="stage-breakdown"></div>
+      </div>
+    </div>
+
+    <!-- ── Jobs ── -->
+    <div id="page-jobs" class="page">
+      <div class="topbar">
+        <div><h2>Job Postings</h2><p class="page-sub">Create and manage open roles</p></div>
+        <button class="btn btn-primary" onclick="openJobModal()">+ New Job</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Title</th><th>Required Skills</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="jobs-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Sessions ── -->
+    <div id="page-sessions" class="page">
+      <div class="topbar">
+        <div><h2>Interview Sessions</h2><p class="page-sub">All interview sessions</p></div>
+        <div class="topbar-actions">
+          <select id="sess-filter-status" onchange="loadSessions()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">All statuses</option>
+            <option>active</option><option>disconnected</option>
+            <option>paused</option><option>ended_by_interviewer</option><option>escalated</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="loadSessions()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Session ID</th><th>Candidate</th><th>Job</th><th>Stage</th><th>Status</th><th>Started</th><th>Actions</th></tr></thead>
+            <tbody id="sessions-tbody"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Candidates ── -->
+    <div id="page-candidates" class="page">
+      <div class="topbar">
+        <div><h2>Candidates</h2><p class="page-sub">All registered candidates</p></div>
+        <button class="btn btn-ghost btn-sm" onclick="loadCandidates()">↻ Refresh</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Candidate ID</th><th>Name</th><th>Email</th><th>Job</th><th>Registered</th><th>Actions</th></tr></thead>
+            <tbody id="cands-tbody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Evaluations ── -->
+    <div id="page-evaluations" class="page">
+      <div class="topbar">
+        <div><h2>Evaluations</h2><p class="page-sub">Scoring results from completed interviews</p></div>
+        <div class="topbar-actions">
+          <select id="eval-filter-rec" onchange="loadEvaluations()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">All recommendations</option>
+            <option>Strong Hire</option><option>Consider</option><option>Pass</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="loadEvaluations()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Session</th><th>Candidate</th>
+              <th>Technical</th><th>Communication</th><th>Problem Solving</th><th>Cultural Fit</th>
+              <th>Total</th><th>Recommendation</th><th>Bias Risk</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="evals-tbody"><tr><td colspan="10" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Bias Alerts ── -->
+    <div id="page-bias" class="page">
+      <div class="topbar">
+        <div><h2>Bias Alerts</h2><p class="page-sub">Fairness flags raised by the Reflection Agent</p></div>
+        <button class="btn btn-ghost btn-sm" onclick="loadBias()">↻ Refresh</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Session</th><th>Risk</th><th>Concerns</th><th>Recommendations</th><th>Flagged At</th><th>Actions</th></tr></thead>
+            <tbody id="bias-tbody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Job Modal ── -->
+<div class="modal-bg" id="job-modal">
+  <div class="modal">
+    <h3 id="job-modal-title">New Job Posting</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Job ID</label>
+        <input type="text" id="jf-id" placeholder="e.g. job_002">
+      </div>
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" id="jf-title" placeholder="e.g. Senior Python Engineer">
+      </div>
+      <div class="form-group full">
+        <label>Required Skills <span style="color:var(--sub);font-weight:400">(comma-separated)</span></label>
+        <input type="text" id="jf-skills" placeholder="Python, FastAPI, PostgreSQL, Docker">
+      </div>
+      <div class="form-group full">
+        <label>Description</label>
+        <textarea id="jf-desc" placeholder="Describe the role and responsibilities…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeJobModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveJob()">Save Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Evaluation Detail Modal ── -->
+<div class="modal-bg" id="eval-modal">
+  <div class="modal">
+    <h3>Evaluation Detail</h3>
+    <div id="eval-detail-content"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('eval-modal').classList.remove('open')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = '';  // same origin
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
+  function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    event.currentTarget.classList.add('active');
+    const loaders = { dashboard: loadDashboard, jobs: loadJobs, sessions: loadSessions,
+                      candidates: loadCandidates, evaluations: loadEvaluations, bias: loadBias };
+    loaders[name]?.();
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  async function api(path, opts = {}) {
+    const r = await fetch(API + path, opts);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+
+  function recPill(rec) {
+    if (!rec) return '<span class="pill grey">—</span>';
+    const map = { 'Strong Hire': 'green', 'Consider': 'yellow', 'Pass': 'red' };
+    return `<span class="pill ${map[rec] || 'grey'}">${rec}</span>`;
+  }
+
+  function riskPill(r) {
+    const map = { HIGH: 'red', MEDIUM: 'yellow', LOW: 'green' };
+    return `<span class="pill ${map[r] || 'grey'}">${r || '—'}</span>`;
+  }
+
+  function statusPill(s) {
+    const map = { active: 'green', disconnected: 'grey', paused: 'yellow',
+                  ended_by_interviewer: 'blue', escalated: 'red', error: 'red' };
+    return `<span class="pill ${map[s] || 'grey'}">${s || '—'}</span>`;
+  }
+
+  function fmt(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit' });
+  }
+
+  function shortId(id) {
+    return id ? id.slice(0, 12) + '…' : '—';
+  }
+
+  function scoreColor(v) {
+    if (v >= 70) return 'green'; if (v >= 50) return 'yellow'; return 'red';
+  }
+
+  // ── Dashboard ──────────────────────────────────────────────────────────────
+  async function loadDashboard() {
+    try {
+      const d = await api('/admin/analytics');
+      document.getElementById('st-sessions').textContent  = d.total_sessions;
+      document.getElementById('st-evals').textContent     = d.total_evaluations;
+      document.getElementById('st-avg').textContent       = d.avg_scores.total || '—';
+      document.getElementById('st-hire').textContent      = d.recommendations['Strong Hire'] || 0;
+      document.getElementById('st-consider').textContent  = d.recommendations['Consider'] || 0;
+      document.getElementById('st-pass').textContent      = d.recommendations['Pass'] || 0;
+      document.getElementById('st-bias').textContent      = d.bias_risk_counts['HIGH'] || 0;
+      document.getElementById('st-active').textContent    = d.by_status['active'] || 0;
+      document.getElementById('dash-refresh-note').textContent =
+        'Updated ' + new Date().toLocaleTimeString();
+
+      // Score breakdown bars
+      const sb = document.getElementById('score-breakdown');
+      const scores = [
+        ['Technical',       d.avg_scores.technical],
+        ['Communication',   d.avg_scores.communication],
+        ['Problem Solving', d.avg_scores.problem_solving],
+        ['Cultural Fit',    d.avg_scores.cultural_fit],
+      ];
+      sb.innerHTML = scores.map(([label, val]) => `
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+            <span>${label}</span><span>${val || 0}/100</span>
+          </div>
+          <div class="score-bar">
+            <div class="score-bar-fill" style="width:${val || 0}%"></div>
+          </div>
+        </div>`).join('');
+
+      // Stage breakdown
+      const stb = document.getElementById('stage-breakdown');
+      const stages = Object.entries(d.by_stage || {});
+      if (!stages.length) { stb.innerHTML = '<p style="color:var(--sub);font-size:14px">No stage data yet.</p>'; return; }
+      const max = Math.max(...stages.map(s => s[1]));
+      stb.innerHTML = stages.map(([stage, count]) => `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;font-size:13px">
+          <span style="width:140px;flex-shrink:0">${stage}</span>
+          <div class="score-bar" style="flex:1">
+            <div class="score-bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:var(--blue)"></div>
+          </div>
+          <span style="width:30px;text-align:right">${count}</span>
+        </div>`).join('');
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
+  // ── Jobs ───────────────────────────────────────────────────────────────────
+  async function loadJobs() {
+    const tbody = document.getElementById('jobs-tbody');
+    try {
+      const jobs = await api('/functions/list_jobs');
+      if (!jobs.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="empty-icon">💼</div>No jobs yet. Click "+ New Job" to create one.</div></td></tr>'; return; }
+      tbody.innerHTML = jobs.map(j => `
+        <tr>
+          <td><code style="font-size:12px">${j.job_id}</code></td>
+          <td><strong>${j.title}</strong></td>
+          <td>${(j.required_skills || []).map(s => `<span class="pill blue" style="margin:1px">${s}</span>`).join(' ')}</td>
+          <td>${j.active === false ? '<span class="pill grey">Inactive</span>' : '<span class="pill green">Active</span>'}</td>
+          <td style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" onclick="editJob('${j.job_id}')">Edit</button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleJob('${j.job_id}')">${j.active === false ? 'Activate' : 'Deactivate'}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteJob('${j.job_id}')">Delete</button>
+          </td>
+        </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  let _editingJobId = null;
+  function openJobModal(id) {
+    _editingJobId = id || null;
+    document.getElementById('job-modal-title').textContent = id ? 'Edit Job' : 'New Job Posting';
+    if (!id) { ['jf-id','jf-title','jf-skills','jf-desc'].forEach(f => document.getElementById(f).value = ''); }
+    document.getElementById('job-modal').classList.add('open');
+  }
+  function closeJobModal() { document.getElementById('job-modal').classList.remove('open'); }
+
+  async function editJob(id) {
+    const job = await api('/functions/get_job_requirements/' + id);
+    document.getElementById('jf-id').value     = id;
+    document.getElementById('jf-title').value  = job.title || '';
+    document.getElementById('jf-skills').value = (job.required_skills || []).join(', ');
+    document.getElementById('jf-desc').value   = job.description || '';
+    openJobModal(id);
+  }
+
+  async function saveJob() {
+    const id     = document.getElementById('jf-id').value.trim();
+    const title  = document.getElementById('jf-title').value.trim();
+    const skills = document.getElementById('jf-skills').value.split(',').map(s => s.trim()).filter(Boolean);
+    const desc   = document.getElementById('jf-desc').value.trim();
+    if (!id || !title) return alert('Job ID and Title are required.');
+    const body = { job_id: id, title, required_skills: skills, description: desc };
+    const method = _editingJobId ? 'PUT' : 'POST';
+    const url    = _editingJobId ? `/jobs/${id}` : '/jobs';
+    await api(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    closeJobModal();
+    loadJobs();
+  }
+
+  async function toggleJob(id) {
+    await api(`/jobs/${id}/toggle`, { method: 'PATCH' });
+    loadJobs();
+  }
+
+  async function deleteJob(id) {
+    if (!confirm(`Delete job "${id}"?`)) return;
+    await api(`/jobs/${id}`, { method: 'DELETE' });
+    loadJobs();
+  }
+
+  // ── Sessions ───────────────────────────────────────────────────────────────
+  async function loadSessions() {
+    const tbody  = document.getElementById('sessions-tbody');
+    const status = document.getElementById('sess-filter-status').value;
+    try {
+      const url  = '/admin/sessions' + (status ? `?status=${status}` : '');
+      const rows = await api(url);
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">🎙️</div>No sessions found.</div></td></tr>'; return; }
+      tbody.innerHTML = rows.map(s => `
+        <tr>
+          <td><code style="font-size:11px">${shortId(s.session_id)}</code></td>
+          <td><code style="font-size:11px">${shortId(s.candidate_id)}</code></td>
+          <td>${s.job_id || '—'}</td>
+          <td><span class="pill grey">${s.stage || '—'}</span></td>
+          <td>${statusPill(s.status)}</td>
+          <td>${fmt(s.started_at)}</td>
+          <td style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" onclick="viewReport('${s.session_id}')">Report</button>
+            <a href="/interviewer?session=${s.session_id}" target="_blank">
+              <button class="btn btn-primary btn-sm">Monitor</button>
+            </a>
+          </td>
+        </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="7" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function viewReport(sessionId) {
+    try {
+      const r = await api('/functions/get_final_report/' + sessionId);
+      const ev = r.evaluation || {};
+      const scores = [
+        ['Technical',       ev.technical_score],
+        ['Communication',   ev.communication_score],
+        ['Problem Solving', ev.problem_solving_score],
+        ['Cultural Fit',    ev.cultural_fit_score],
+      ];
+      document.getElementById('eval-detail-content').innerHTML = `
+        <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Session: <code>${sessionId}</code></p>
+        <div class="score-grid">
+          ${scores.map(([l,v]) => `<div class="score-item"><label>${l}</label>
+            <div class="score-num" style="color:var(--${scoreColor(v||0)})">${v ?? '—'}</div>
+          </div>`).join('')}
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin:16px 0;padding:16px;background:var(--bg);border-radius:10px">
+          <div><div style="font-size:12px;color:var(--sub)">Total Score</div>
+               <div style="font-size:32px;font-weight:700">${ev.total_score ?? '—'}</div></div>
+          <div style="margin-left:auto">${recPill(ev.recommendation)}</div>
+          <div>${riskPill(ev.bias_risk)}</div>
+        </div>
+        <div style="font-size:13px;color:var(--sub)">Skills found: <strong>${(r.skills||[]).length}</strong>
+          &nbsp;|&nbsp; Bias alerts: <strong>${(r.bias_alerts||[]).length}</strong></div>`;
+      document.getElementById('eval-modal').classList.add('open');
+    } catch(e) { alert('No report yet: ' + e.message); }
+  }
+
+  // ── Candidates ─────────────────────────────────────────────────────────────
+  async function loadCandidates() {
+    const tbody = document.getElementById('cands-tbody');
+    try {
+      const rows = await api('/admin/candidates');
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">👤</div>No candidates yet.</div></td></tr>'; return; }
+      tbody.innerHTML = rows.map(c => `
+        <tr>
+          <td><code style="font-size:11px">${c.candidate_id}</code></td>
+          <td>${c.name || '—'}</td>
+          <td>${c.email || '—'}</td>
+          <td>${c.job_id || '—'}</td>
+          <td>${fmt(c.created_at)}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="viewReport('${c.candidate_id}')">Report</button>
+          </td>
+        </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  // ── Evaluations ────────────────────────────────────────────────────────────
+  async function loadEvaluations() {
+    const tbody = document.getElementById('evals-tbody');
+    const rec   = document.getElementById('eval-filter-rec').value;
+    try {
+      const url  = '/admin/evaluations' + (rec ? `?recommendation=${encodeURIComponent(rec)}` : '');
+      const rows = await api(url);
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10"><div class="empty"><div class="empty-icon">📋</div>No evaluations yet.</div></td></tr>'; return; }
+      tbody.innerHTML = rows.map(e => `
+        <tr>
+          <td><code style="font-size:11px">${shortId(e.session_id)}</code></td>
+          <td><code style="font-size:11px">${shortId(e.candidate_id)}</code></td>
+          <td><span style="color:var(--${scoreColor(e.technical_score||0)})">${e.technical_score ?? '—'}</span></td>
+          <td><span style="color:var(--${scoreColor(e.communication_score||0)})">${e.communication_score ?? '—'}</span></td>
+          <td><span style="color:var(--${scoreColor(e.problem_solving_score||0)})">${e.problem_solving_score ?? '—'}</span></td>
+          <td><span style="color:var(--${scoreColor(e.cultural_fit_score||0)})">${e.cultural_fit_score ?? '—'}</span></td>
+          <td><strong>${e.total_score ?? '—'}</strong></td>
+          <td>${recPill(e.recommendation)}</td>
+          <td>${riskPill(e.bias_risk)}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick='showEvalDetail(${JSON.stringify(e)})'>Detail</button>
+          </td>
+        </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="10" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  function showEvalDetail(e) {
+    const scores = [
+      ['Technical',       e.technical_score],
+      ['Communication',   e.communication_score],
+      ['Problem Solving', e.problem_solving_score],
+      ['Cultural Fit',    e.cultural_fit_score],
+    ];
+    document.getElementById('eval-detail-content').innerHTML = `
+      <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Session: <code>${e.session_id}</code></p>
+      <div class="score-grid">
+        ${scores.map(([l,v]) => `<div class="score-item"><label>${l}</label>
+          <div class="score-num" style="color:var(--${scoreColor(v||0)})">${v ?? '—'}</div>
+        </div>`).join('')}
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin:16px 0;padding:16px;background:var(--bg);border-radius:10px">
+        <div><div style="font-size:12px;color:var(--sub)">Total Score</div>
+             <div style="font-size:32px;font-weight:700">${e.total_score ?? '—'}</div></div>
+        <div style="margin-left:auto">${recPill(e.recommendation)}</div>
+        <div>${riskPill(e.bias_risk)}</div>
+      </div>`;
+    document.getElementById('eval-modal').classList.add('open');
+  }
+
+  // ── Bias Alerts ────────────────────────────────────────────────────────────
+  async function loadBias() {
+    const tbody = document.getElementById('bias-tbody');
+    try {
+      const rows = await api('/admin/high_bias_alerts?reviewed=false');
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">✅</div>No unreviewed HIGH bias alerts.</div></td></tr>'; return; }
+      tbody.innerHTML = rows.map(b => `
+        <tr>
+          <td><code style="font-size:11px">${shortId(b.session_id)}</code></td>
+          <td>${riskPill(b.risk_level)}</td>
+          <td style="max-width:260px;font-size:13px">${b.concerns || '—'}</td>
+          <td style="max-width:220px;font-size:13px;color:var(--sub)">${b.recommendations || '—'}</td>
+          <td>${fmt(b.flagged_at)}</td>
+          <td>
+            <button class="btn btn-primary btn-sm" onclick="markReviewed('${b.session_id}', this)">Mark Reviewed</button>
+          </td>
+        </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function markReviewed(sessionId, btn) {
+    btn.disabled = true; btn.textContent = '…';
+    await api(`/admin/mark_bias_reviewed/${sessionId}`, { method: 'POST' });
+    loadBias();
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  loadDashboard();
+
+  // Auto-refresh dashboard every 30 s when visible
+  setInterval(() => {
+    if (document.getElementById('page-dashboard').classList.contains('active')) loadDashboard();
+  }, 30000);
+</script>
+</body>
+</html>
