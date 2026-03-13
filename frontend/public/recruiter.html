@@ -204,6 +204,60 @@
       .topnav{padding:14px 16px}
       .page{padding:24px 16px}
     }
+
+    /* ── Live Coding extras ── */
+    :root { --orange:#fb923c; }
+    .btn-orange{background:var(--orange);color:#fff}
+    .num-input{width:100%;padding:11px 14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border-color .2s;}
+    .num-input:focus{border-color:var(--orange)}
+    .q-item{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
+    .q-item-info{flex:1;min-width:0}
+    .q-item-title{font-size:14px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .q-item-meta{font-size:12px;color:var(--sub)}
+    .q-diff-easy{color:var(--green)}.q-diff-medium{color:var(--yellow)}.q-diff-hard{color:var(--red)}
+    .q-delete{background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:2px 6px;opacity:.6;transition:opacity .15s;flex-shrink:0}
+    .q-delete:hover{opacity:1}
+    textarea.q-textarea{min-height:100px}
+    .lc-room-box{background:var(--surface2);border:2px dashed rgba(251,146,60,.3);border-radius:14px;padding:28px;text-align:center;margin:20px 0;}
+    .lc-code{font-size:clamp(32px,7vw,56px);font-weight:900;letter-spacing:6px;color:var(--orange);font-family:'Courier New',monospace;text-shadow:0 0 30px rgba(251,146,60,.25)}
+    .tab-section{display:none}
+    .tab-section.lc-active{display:block}
+    .diff-select{width:100%;padding:11px 14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border-color .2s;cursor:pointer;}
+    .diff-select:focus{border-color:var(--orange)}
+    /* ── Q-input mode toggle ── */
+    .q-mode-tabs{display:flex;gap:0;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:18px;}
+    .q-mode-tab{flex:1;padding:9px 0;background:none;border:none;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;transition:background .2s,color .2s;}
+    .q-mode-tab.active{background:var(--orange);color:#fff;}
+    /* ── PDF drop zone ── */
+    .pdf-drop{border:2px dashed rgba(251,146,60,.4);border-radius:14px;padding:40px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;}
+    .pdf-drop:hover,.pdf-drop.dragging{border-color:var(--orange);background:rgba(251,146,60,.06);}
+    .pdf-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+    .pdf-drop-icon{font-size:40px;margin-bottom:10px;}
+    .pdf-drop-label{font-size:14px;color:var(--sub);line-height:1.6;}
+    .pdf-drop-label strong{color:var(--text);}
+    /* also support pasting text */
+    .pdf-paste-area{width:100%;min-height:120px;padding:12px 14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-family:inherit;resize:vertical;outline:none;transition:border-color .2s;margin-top:14px;}
+    .pdf-paste-area:focus{border-color:var(--orange);}
+    /* ── preview modal ── */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
+    .modal-box{background:var(--card);border:1px solid var(--border);border-radius:20px;width:100%;max-width:720px;padding:32px;position:relative;}
+    .modal-title{font-size:18px;font-weight:800;margin-bottom:4px;}
+    .modal-sub{font-size:13px;color:var(--sub);margin-bottom:22px;}
+    .modal-close{position:absolute;top:16px;right:18px;background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;}
+    .parsed-q-card{background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:flex-start;}
+    .parsed-q-card.deselected{opacity:.4;}
+    .parsed-q-check{width:20px;height:20px;accent-color:var(--orange);cursor:pointer;margin-top:1px;}
+    .parsed-q-title{font-size:14px;font-weight:700;margin-bottom:4px;}
+    .parsed-q-desc{font-size:13px;color:var(--sub);line-height:1.55;margin-bottom:6px;white-space:pre-wrap;max-height:80px;overflow:hidden;}
+    .parsed-q-meta{font-size:12px;color:var(--sub);}
+    .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;border-top:1px solid var(--border);padding-top:18px;}
+    .sessions-list{display:flex;flex-direction:column;gap:10px}
+    .sess-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+    .sess-name{font-size:14px;font-weight:700}
+    .sess-meta{font-size:12px;color:var(--sub);margin-top:4px}
+    .status-pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}
+    .status-active{background:rgba(52,211,153,.15);color:var(--green)}
+    .status-completed{background:rgba(79,142,247,.15);color:var(--blue)}
   </style>
 </head>
 <body>
@@ -214,6 +268,7 @@
   <div class="nav-tabs">
     <button class="tab active" onclick="showTab('create')">Create Room</button>
     <button class="tab" onclick="showTab('results')">View Results</button>
+    <button class="tab" onclick="showTab('livecoding')" style="color:var(--orange)">🖥 Live Coding</button>
   </div>
   <a href="/" class="nav-back">← Home</a>
 </nav>
@@ -301,6 +356,186 @@
   </div>
 </div>
 
+<!-- ════════════════════════ LIVE CODING ════════════════════════ -->
+<div id="tab-livecoding" class="page">
+  <h2>Live Coding Rooms</h2>
+  <p class="page-sub">Create a coding challenge room, upload questions, then share the room code with candidates.</p>
+  <div id="lc-alert"></div>
+
+  <!-- Sub-tabs -->
+  <div style="display:flex;gap:4px;margin-bottom:24px">
+    <button class="tab active" id="lc-tab-create" onclick="lcShowSection('create')">Create Room</button>
+    <button class="tab" id="lc-tab-questions" onclick="lcShowSection('questions')" disabled>Add Questions</button>
+    <button class="tab" id="lc-tab-sessions" onclick="lcShowSection('sessions')" disabled>View Sessions</button>
+  </div>
+
+  <!-- CREATE ROOM -->
+  <div id="lc-section-create" class="tab-section lc-active">
+    <div class="card">
+      <div class="form-group">
+        <label>Room Title <span style="color:var(--red)">*</span></label>
+        <input type="text" id="lc-title" placeholder="e.g. Backend Engineer — Coding Round"/>
+      </div>
+      <div class="form-group">
+        <label>Description (optional)</label>
+        <textarea id="lc-desc" rows="2" placeholder="e.g. Focus on data structures, algorithms, and problem solving."></textarea>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Questions to ask candidate</label>
+          <input type="number" class="num-input" id="lc-num-q" value="3" min="1" max="10" placeholder="3"/>
+          <div style="font-size:12px;color:var(--sub);margin-top:5px">Agent will randomly pick this many from your uploaded pool</div>
+        </div>
+        <div>
+          <label>Time Limit (minutes)</label>
+          <input type="number" class="num-input" id="lc-time" value="60" min="10" max="180" placeholder="60"/>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end">
+        <button class="btn btn-orange" id="lc-create-btn" onclick="createLCRoom()">Create Coding Room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD QUESTIONS (unlocked after room created) -->
+  <div id="lc-section-questions" class="tab-section">
+    <div id="lc-room-code-display" class="lc-room-box" style="margin-bottom:20px">
+      <div id="lc-code-val" class="lc-code">LC-XXXX</div>
+      <div style="font-size:13px;color:var(--sub);margin-top:8px">Share this code with candidates</div>
+      <div style="margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <div class="copy-btn" id="lc-copy-btn" onclick="copyLCCode()">
+          <span id="lc-copy-icon">📋</span> <span id="lc-copy-text">Copy Code</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="lcShowSection('sessions')">View Sessions →</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">Add Questions</div>
+
+      <!-- mode toggle -->
+      <div class="q-mode-tabs">
+        <button class="q-mode-tab active" id="qmode-manual" onclick="switchQMode('manual')">✏️ Manual Entry</button>
+        <button class="q-mode-tab"        id="qmode-pdf"    onclick="switchQMode('pdf')">📄 Upload PDF / Paste Text</button>
+      </div>
+
+      <!-- ── MANUAL MODE ── -->
+      <div id="q-manual-panel">
+        <div class="form-group">
+          <label>Question Title <span style="color:var(--red)">*</span></label>
+          <input type="text" id="q-title" placeholder="e.g. Two Sum"/>
+        </div>
+        <div class="form-group">
+          <label>Description <span style="color:var(--red)">*</span></label>
+          <textarea class="q-textarea" id="q-desc" rows="4"
+            placeholder="Describe the problem clearly. Include input/output format."></textarea>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Difficulty</label>
+            <select class="diff-select" id="q-diff">
+              <option value="easy">Easy</option>
+              <option value="medium" selected>Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+          <div>
+            <label>Tags (comma-separated)</label>
+            <input type="text" id="q-tags" placeholder="array, hash-map, dp"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Constraints (optional)</label>
+          <textarea id="q-constraints" rows="2" placeholder="• 1 ≤ n ≤ 10^4&#10;• -10^9 ≤ nums[i] ≤ 10^9"></textarea>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Starter Code — Python</label>
+            <textarea id="q-starter-py" rows="3" placeholder="def solution():\n    pass"
+                      style="font-family:'Courier New',monospace;font-size:13px"></textarea>
+          </div>
+          <div>
+            <label>Starter Code — JavaScript</label>
+            <textarea id="q-starter-js" rows="3" placeholder="function solution() {\n\n}"
+                      style="font-family:'Courier New',monospace;font-size:13px"></textarea>
+          </div>
+        </div>
+        <div style="margin-bottom:14px">
+          <label>Example (optional)</label>
+          <div class="form-row">
+            <input type="text" id="q-ex-in"  placeholder="Input: [2,7,11,15], target=9"/>
+            <input type="text" id="q-ex-out" placeholder="Output: [0,1]"/>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn btn-orange" id="lc-add-q-btn" onclick="addQuestion()">Add Question</button>
+        </div>
+      </div>
+
+      <!-- ── PDF / PASTE MODE ── -->
+      <div id="q-pdf-panel" style="display:none">
+        <div class="pdf-drop" id="pdf-drop-zone"
+             ondragover="event.preventDefault();this.classList.add('dragging')"
+             ondragleave="this.classList.remove('dragging')"
+             ondrop="onPdfDrop(event)">
+          <input type="file" accept=".pdf,.txt" id="pdf-file-input" onchange="onPdfFileChange(event)"/>
+          <div class="pdf-drop-icon">📄</div>
+          <div class="pdf-drop-label">
+            <strong>Drag &amp; drop a PDF here</strong>, or click to browse<br/>
+            <span style="font-size:12px">.pdf and .txt files supported</span>
+          </div>
+        </div>
+        <div style="text-align:center;margin:10px 0;font-size:12px;color:var(--sub)">— or paste question text directly —</div>
+        <textarea class="pdf-paste-area" id="pdf-paste-text"
+          placeholder="Paste your questions here. Separate multiple questions with blank lines or numbers (1. 2. 3.)
+Example:
+1. Two Sum
+Given an array of integers and a target, return indices of two numbers that add up to the target.
+Difficulty: Easy
+
+2. Valid Parentheses
+Given a string of brackets, determine if it is valid..."></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-orange" id="pdf-parse-btn" onclick="parsePdfOrText()">🔍 Extract Questions</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Question list -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700">Questions in this room</div>
+        <span id="q-count" style="font-size:12px;color:var(--sub)">0 questions</span>
+      </div>
+      <div id="q-list"><div style="color:var(--sub);font-size:13px">No questions yet. Add your first one above.</div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════ PARSED QUESTIONS PREVIEW MODAL ══════════════ -->
+  <div class="modal-overlay" id="parsed-modal" style="display:none" onclick="if(event.target===this)closeParsedModal()">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeParsedModal()">×</button>
+      <div class="modal-title">Extracted Questions</div>
+      <div class="modal-sub" id="parsed-modal-sub">Review and select which questions to add to the room.</div>
+      <div id="parsed-q-list"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeParsedModal()">Cancel</button>
+        <button class="btn btn-orange" id="add-parsed-btn" onclick="addAllParsed()">➕ Add Selected to Room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW SESSIONS -->
+  <div id="lc-section-sessions" class="tab-section">
+    <div class="room-lookup" style="margin-bottom:20px">
+      <input type="text" id="lc-lookup-code" placeholder="LC-XXXX" class="code-input"
+             style="font-size:18px;font-weight:700;letter-spacing:3px;text-transform:uppercase;flex:1;"/>
+      <button class="btn btn-ghost" onclick="loadLCSessions()">Load Sessions</button>
+    </div>
+    <div id="lc-sessions-content"></div>
+  </div>
+</div>
+
 <!-- ════════════════════════════ VIEW RESULTS ════════════════════════════ -->
 <div id="tab-results" class="page">
   <h2>Results Dashboard</h2>
@@ -323,17 +558,20 @@
 const API = '/api';  // proxied to FastAPI
 
 // ─── Tab navigation ───────────────────────────────────────────────────────────
-const TABS = ['create', 'created', 'results'];
-let _tabs_with_btn = ['create', 'results'];
+const TABS = ['create', 'created', 'results', 'livecoding'];
 
 function showTab(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   const el = document.getElementById(`tab-${name}`);
   if (el) el.classList.add('active');
-  // highlight nav button if applicable
-  document.querySelectorAll('.tab').forEach(t => {
-    if (t.textContent.trim().toLowerCase().includes(name === 'create' ? 'create' : 'result')) {
+  // highlight the matching nav button
+  document.querySelectorAll('.topnav .tab').forEach(t => {
+    const txt = t.textContent.trim().toLowerCase();
+    if ((name === 'create'  && txt.includes('create')) ||
+        (name === 'created' && txt.includes('create')) ||
+        (name === 'results' && txt.includes('result')) ||
+        (name === 'livecoding' && txt.includes('live'))) {
       t.classList.add('active');
     }
   });
@@ -566,7 +804,7 @@ function renderResults({ job, candidates }) {
   const total    = candidates.length;
   const evaled   = candidates.filter(c => c.evaluation).length;
   const avgScore = evaled
-    ? (candidates.filter(c=>c.evaluation).reduce((s,c)=>s+c.evaluation.total_score,0) / evaled).toFixed(1)
+    ? (candidates.filter(c=>c.evaluation).reduce((s,c)=>s+(c.evaluation.overall_score??c.evaluation.total_score??0),0) / evaled).toFixed(1)
     : '—';
   const strongHire = candidates.filter(c=>c.evaluation?.recommendation==='Strong Hire').length;
   const consider   = candidates.filter(c=>c.evaluation?.recommendation==='Consider').length;
@@ -614,9 +852,9 @@ function fmtDate(iso) {
 }
 
 function renderCandCard({ session, candidate, evaluation }, idx) {
-  const score = evaluation ? evaluation.total_score.toFixed(1) : '—';
+  const score = evaluation ? (evaluation.overall_score ?? evaluation.total_score ?? 0).toFixed(1) : '—';
   const rec   = evaluation?.recommendation || 'Pending';
-  const color = evaluation ? scoreColor(evaluation.total_score) : 'var(--sub)';
+  const color = evaluation ? scoreColor(evaluation.overall_score ?? evaluation.total_score ?? 0) : 'var(--sub)';
 
   return `
   <div class="cand-card" id="cand-${idx}">
@@ -642,7 +880,7 @@ function renderCandCard({ session, candidate, evaluation }, idx) {
           ['Communication',  evaluation.communication_score,   'var(--purple)'],
           ['Problem Solving',evaluation.problem_solving_score, 'var(--yellow)'],
           ['Cultural Fit',   evaluation.cultural_fit_score,    'var(--green)'],
-          ['Total Score',    evaluation.total_score,           scoreColor(evaluation.total_score)],
+          ['Total Score',    evaluation.overall_score??evaluation.total_score??0, scoreColor(evaluation.overall_score??evaluation.total_score??0)],
         ].map(([lbl, val, col]) => `
           <div class="eval-item">
             <label>${lbl}</label>
@@ -674,6 +912,327 @@ function renderCandCard({ session, candidate, evaluation }, idx) {
 function toggleCand(idx) {
   const card = document.getElementById(`cand-${idx}`);
   card.classList.toggle('expanded');
+}
+
+// ═══════════════════════════ LIVE CODING ═══════════════════════════
+let _lcRoomCode = '';
+let _lcQuestions = [];
+
+function lcShowSection(name) {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('lc-active'));
+  document.querySelectorAll('#tab-livecoding .tab').forEach(t => t.classList.remove('active'));
+  const sec = document.getElementById(`lc-section-${name}`);
+  if (sec) sec.classList.add('lc-active');
+  const btn = document.getElementById(`lc-tab-${name}`);
+  if (btn) btn.classList.add('active');
+}
+
+async function createLCRoom() {
+  const title = document.getElementById('lc-title').value.trim();
+  const desc  = document.getElementById('lc-desc').value.trim();
+  const numQ  = parseInt(document.getElementById('lc-num-q').value) || 3;
+  const time  = parseInt(document.getElementById('lc-time').value)  || 60;
+  if (!title) { showAlert('lc-alert', 'Room title is required.'); return; }
+  const btn = document.getElementById('lc-create-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Creating…';
+  try {
+    const res = await fetch(`${API}/coding-rooms`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description: desc, num_questions: numQ,
+        time_limit_minutes: time, interviewer_id: localStorage.getItem('interviewerId') || 'default' }),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || res.statusText); }
+    const data = await res.json();
+    _lcRoomCode = data.room_code;
+    document.getElementById('lc-code-val').textContent = _lcRoomCode;
+    // Unlock tabs
+    document.getElementById('lc-tab-questions').disabled = false;
+    document.getElementById('lc-tab-sessions').disabled  = false;
+    document.getElementById('lc-lookup-code').value = _lcRoomCode;
+    showAlert('lc-alert', `Room ${_lcRoomCode} created! Now add your questions.`, 'success');
+    lcShowSection('questions');
+    _lcQuestions = [];
+    renderQuestionList();
+  } catch (err) {
+    showAlert('lc-alert', `Failed: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create Coding Room';
+  }
+}
+
+/* ── Q-input mode toggle ── */
+function switchQMode(mode) {
+  document.getElementById('q-manual-panel').style.display = mode === 'manual' ? '' : 'none';
+  document.getElementById('q-pdf-panel').style.display    = mode === 'pdf'    ? '' : 'none';
+  document.getElementById('qmode-manual').classList.toggle('active', mode === 'manual');
+  document.getElementById('qmode-pdf').classList.toggle('active',    mode === 'pdf');
+}
+
+/* ── PDF / paste extraction ── */
+function onPdfDrop(e) {
+  e.preventDefault();
+  document.getElementById('pdf-drop-zone').classList.remove('dragging');
+  const file = e.dataTransfer.files[0];
+  if (file) processPdfFile(file);
+}
+function onPdfFileChange(e) {
+  const file = e.target.files[0];
+  if (file) processPdfFile(file);
+}
+function processPdfFile(file) {
+  const label = document.querySelector('.pdf-drop-label');
+  if (file.name.endsWith('.txt')) {
+    const reader = new FileReader();
+    reader.onload = ev => { document.getElementById('pdf-paste-text').value = ev.target.result; };
+    reader.readAsText(file);
+    label.innerHTML = `<strong>${escHtmlR(file.name)}</strong> loaded — click "Extract Questions" when ready.`;
+    return;
+  }
+  // PDF: load pdf.js then extract text
+  label.innerHTML = '⏳ Reading PDF…';
+  loadPdfJs(() => {
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      try {
+        const pdf = await pdfjsLib.getDocument({ data: ev.target.result }).promise;
+        let fullText = '';
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page    = await pdf.getPage(p);
+          const content = await page.getTextContent();
+          fullText += content.items.map(i => i.str).join(' ') + '\n';
+        }
+        document.getElementById('pdf-paste-text').value = fullText.trim();
+        label.innerHTML = `<strong>${escHtmlR(file.name)}</strong> (${pdf.numPages} page${pdf.numPages!==1?'s':''}) — click "Extract Questions" when ready.`;
+      } catch(err) {
+        label.innerHTML = '⚠️ Could not read PDF. Try copying the text and pasting below.';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+function loadPdfJs(cb) {
+  if (window.pdfjsLib) { cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  s.onload = () => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    cb();
+  };
+  document.head.appendChild(s);
+}
+
+async function parsePdfOrText() {
+  const text = document.getElementById('pdf-paste-text').value.trim();
+  if (!text) { showAlert('lc-alert', 'Paste or upload some text / PDF first.'); return; }
+  if (!_lcRoomCode) { showAlert('lc-alert', 'Create a room first.'); return; }
+  const btn = document.getElementById('pdf-parse-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Extracting…';
+  try {
+    const res = await fetch(`${API}/parse-questions-text`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, room_code: _lcRoomCode }),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || res.statusText); }
+    const data = await res.json();
+    showParsedModal(data.questions, data.source);
+  } catch(err) {
+    showAlert('lc-alert', `Extraction failed: ${err.message}`);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 Extract Questions';
+  }
+}
+
+/* ── Preview modal ── */
+let _parsedQuestions = [];
+function showParsedModal(questions, source) {
+  _parsedQuestions = questions;
+  document.getElementById('parsed-modal-sub').textContent =
+    `${questions.length} question${questions.length!==1?'s':''} extracted` +
+    (source === 'ai' ? ' (AI-parsed)' : ' (rule-based)') +
+    '. Uncheck any you want to skip.';
+  document.getElementById('parsed-q-list').innerHTML = questions.map((q, i) => `
+    <div class="parsed-q-card" id="pqcard-${i}">
+      <input type="checkbox" class="parsed-q-check" id="pq-chk-${i}" checked
+             onchange="document.getElementById('pqcard-${i}').classList.toggle('deselected',!this.checked)">
+      <div>
+        <div class="parsed-q-title">${escHtmlR(q.title)}</div>
+        <div class="parsed-q-desc">${escHtmlR((q.description||'').substring(0,220))}${(q.description||'').length>220?'…':''}</div>
+        <div class="parsed-q-meta">
+          <span class="q-diff-${q.difficulty}">${q.difficulty}</span>
+          ${q.tags&&q.tags.length ? ' · '+q.tags.slice(0,4).map(escHtmlR).join(', ') : ''}
+        </div>
+      </div>
+    </div>`).join('');
+  document.getElementById('parsed-modal').style.display = 'flex';
+}
+function closeParsedModal() {
+  document.getElementById('parsed-modal').style.display = 'none';
+}
+async function addAllParsed() {
+  const selected = _parsedQuestions.filter((_,i) => document.getElementById(`pq-chk-${i}`)?.checked);
+  if (!selected.length) { showAlert('lc-alert','No questions selected.'); return; }
+  const btn = document.getElementById('add-parsed-btn');
+  btn.disabled = true; btn.textContent = `Adding 0/${selected.length}…`;
+  let added = 0, failed = 0;
+  for (const q of selected) {
+    try {
+      const res = await fetch(`${API}/coding-rooms/${_lcRoomCode}/questions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: q.title, description: q.description, difficulty: q.difficulty,
+          tags: q.tags || [], examples: q.examples || [], constraints: q.constraints || '',
+          starter_code_python: q.starter_code_python || 'def solution():\n    pass\n',
+          starter_code_js: q.starter_code_js || 'function solution() {\n  \n}\n',
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        _lcQuestions.push({ question_id: d.question_id, title: q.title, difficulty: q.difficulty, tags: q.tags||[] });
+        added++;
+      } else { failed++; }
+    } catch { failed++; }
+    btn.textContent = `Adding ${added}/${selected.length}…`;
+  }
+  renderQuestionList();
+  closeParsedModal();
+  const msg = `${added} question${added!==1?'s':''} added${failed?`, ${failed} failed`:''}. `;
+  showAlert('lc-alert', msg, added > 0 ? 'success' : undefined);
+  btn.disabled = false; btn.textContent = '➕ Add Selected to Room';
+  // clear paste area
+  document.getElementById('pdf-paste-text').value = '';
+  document.getElementById('pdf-file-input').value = '';
+  document.querySelector('.pdf-drop-label').innerHTML =
+    '<strong>Drag &amp; drop a PDF here</strong>, or click to browse<br/><span style="font-size:12px">.pdf and .txt files supported</span>';
+}
+
+async function addQuestion() {
+  if (!_lcRoomCode) { showAlert('lc-alert', 'Create a room first.'); return; }
+  const title = document.getElementById('q-title').value.trim();
+  const desc  = document.getElementById('q-desc').value.trim();
+  if (!title) { showAlert('lc-alert', 'Question title is required.'); return; }
+  if (!desc)  { showAlert('lc-alert', 'Question description is required.'); return; }
+  const tags       = document.getElementById('q-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const difficulty = document.getElementById('q-diff').value;
+  const constraints = document.getElementById('q-constraints').value.trim();
+  const starterPy = document.getElementById('q-starter-py').value || 'def solution():\n    pass\n';
+  const starterJs = document.getElementById('q-starter-js').value || 'function solution() {\n  \n}\n';
+  const exIn  = document.getElementById('q-ex-in').value.trim();
+  const exOut = document.getElementById('q-ex-out').value.trim();
+  const examples = (exIn || exOut) ? [{ input: exIn, output: exOut }] : [];
+  const btn = document.getElementById('lc-add-q-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Adding…';
+  try {
+    const res = await fetch(`${API}/coding-rooms/${_lcRoomCode}/questions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description: desc, difficulty, tags, examples, constraints,
+        starter_code_python: starterPy, starter_code_js: starterJs }),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || res.statusText); }
+    const data = await res.json();
+    _lcQuestions.push({ question_id: data.question_id, title, difficulty, tags });
+    renderQuestionList();
+    // Clear form
+    ['q-title','q-desc','q-tags','q-constraints','q-starter-py','q-starter-js','q-ex-in','q-ex-out']
+      .forEach(id => document.getElementById(id).value = '');
+    document.getElementById('q-diff').value = 'medium';
+    showAlert('lc-alert', `Question "${title}" added.`, 'success');
+  } catch (err) {
+    showAlert('lc-alert', `Failed to add question: ${err.message}`);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add Question';
+  }
+}
+
+function renderQuestionList() {
+  const list = document.getElementById('q-list');
+  document.getElementById('q-count').textContent = `${_lcQuestions.length} question${_lcQuestions.length !== 1 ? 's' : ''}`;
+  if (!_lcQuestions.length) {
+    list.innerHTML = '<div style="color:var(--sub);font-size:13px">No questions yet. Add your first one above.</div>';
+    return;
+  }
+  list.innerHTML = _lcQuestions.map((q, i) => `
+    <div class="q-item">
+      <div class="q-item-info">
+        <div class="q-item-title">${escHtmlR(q.title)}</div>
+        <div class="q-item-meta"><span class="q-diff-${q.difficulty}">${q.difficulty}</span>
+          ${q.tags && q.tags.length ? ' · ' + q.tags.slice(0,3).map(escHtmlR).join(', ') : ''}
+        </div>
+      </div>
+      <button class="q-delete" onclick="deleteQuestion(${i}, '${q.question_id}')" title="Remove">×</button>
+    </div>`).join('');
+}
+
+async function deleteQuestion(idx, qId) {
+  if (!confirm('Remove this question?')) return;
+  try {
+    await fetch(`${API}/coding-rooms/${_lcRoomCode}/questions/${qId}`, { method: 'DELETE' });
+    _lcQuestions.splice(idx, 1);
+    renderQuestionList();
+  } catch (e) { showAlert('lc-alert', 'Delete failed: ' + e.message); }
+}
+
+function copyLCCode() {
+  navigator.clipboard.writeText(_lcRoomCode).then(() => {
+    document.getElementById('lc-copy-icon').textContent = '✅';
+    document.getElementById('lc-copy-text').textContent = 'Copied!';
+    document.getElementById('lc-copy-btn').classList.add('copied');
+    setTimeout(() => {
+      document.getElementById('lc-copy-icon').textContent = '📋';
+      document.getElementById('lc-copy-text').textContent = 'Copy Code';
+      document.getElementById('lc-copy-btn').classList.remove('copied');
+    }, 2500);
+  });
+}
+
+async function loadLCSessions() {
+  const code = document.getElementById('lc-lookup-code').value.trim().toUpperCase();
+  if (!code) { showAlert('lc-alert', 'Enter a room code first.'); return; }
+  const content = document.getElementById('lc-sessions-content');
+  content.innerHTML = '<div class="empty"><span class="spin" style="width:22px;height:22px;border-width:3px"></span></div>';
+  try {
+    const res = await fetch(`${API}/coding-rooms/${code}/sessions`);
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || res.statusText); }
+    const data = await res.json();
+    const { room, sessions } = data;
+    if (!sessions.length) {
+      content.innerHTML = `<div class="empty"><div class="empty-icon">💻</div>No candidates have joined <strong>${code}</strong> yet.</div>`;
+      return;
+    }
+    content.innerHTML = `
+      <div style="margin-bottom:16px">
+        <h3 style="font-size:16px;font-weight:700">${escHtmlR(room.title)}</h3>
+        <p style="font-size:13px;color:var(--sub);margin-top:4px">${sessions.length} session${sessions.length!==1?'s':''} · ${room.num_questions} question${room.num_questions!==1?'s':''} per candidate</p>
+      </div>
+      <div class="sessions-list">${sessions.map(renderSessionCard).join('')}</div>`;
+  } catch (err) {
+    content.innerHTML = `<div class="alert error">${err.message}</div>`;
+  }
+}
+
+function renderSessionCard(s) {
+  const statusCls = s.status === 'completed' ? 'status-completed' : 'status-active';
+  const emotions  = (s.emotion_timeline || []).slice(-5);
+  const emotions_str = emotions.map(e => e.emotion).join(' → ') || 'No data';
+  const started = s.started_at ? new Date(s.started_at).toLocaleString() : '—';
+  return `
+    <div class="sess-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="sess-name">${escHtmlR(s.candidate_name || 'Unknown')}</div>
+          <div class="sess-meta">${escHtmlR(s.candidate_email || '')} · Started: ${started}</div>
+        </div>
+        <span class="status-pill ${statusCls}">${s.status}</span>
+      </div>
+      ${emotions.length ? `<div style="margin-top:10px;font-size:12px;color:var(--sub)">Emotions: <strong style="color:var(--text)">${emotions_str}</strong></div>` : ''}
+      <div style="margin-top:8px;font-size:12px;color:var(--sub)">Session: <code style="color:var(--sub);font-family:'Courier New',monospace">${s.session_id}</code></div>
+    </div>`;
+}
+
+function escHtmlR(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 </script>
 </body>

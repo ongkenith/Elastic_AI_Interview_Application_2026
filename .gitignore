@@ -15,3 +15,5 @@ build/
 *.log
 esdata/
 .DS_Store
+cv/
+recordings/

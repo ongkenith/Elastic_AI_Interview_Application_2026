@@ -17,6 +17,8 @@
       --sub: #8888aa;
       --glow-blue: rgba(79,142,247,.18);
       --glow-purple: rgba(139,92,246,.18);
+      --orange: #fb923c;
+      --glow-orange: rgba(251,146,60,.18);
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -94,9 +96,11 @@
     }
     .portal-card.recruiter::before { background: radial-gradient(circle at 30% 30%, var(--glow-blue), transparent 70%); }
     .portal-card.candidate::before { background: radial-gradient(circle at 30% 30%, var(--glow-purple), transparent 70%); }
+    .portal-card.livecoding::before { background: radial-gradient(circle at 30% 30%, var(--glow-orange), transparent 70%); }
     .portal-card:hover { transform: translateY(-4px); }
     .portal-card.recruiter:hover { border-color: var(--blue); box-shadow: 0 8px 40px rgba(79,142,247,.15); }
     .portal-card.candidate:hover { border-color: var(--purple); box-shadow: 0 8px 40px rgba(139,92,246,.15); }
+    .portal-card.livecoding:hover { border-color: var(--orange); box-shadow: 0 8px 40px rgba(251,146,60,.15); }
     .portal-card:hover::before { opacity: 1; }
 
     .portal-icon {
@@ -107,6 +111,7 @@
     }
     .recruiter .portal-icon { background: rgba(79,142,247,.15); }
     .candidate .portal-icon { background: rgba(139,92,246,.15); }
+    .livecoding .portal-icon { background: rgba(251,146,60,.15); }
 
     .portal-title {
       font-size: 20px;
@@ -127,6 +132,7 @@
     }
     .recruiter .portal-cta { color: var(--blue); }
     .candidate .portal-cta { color: var(--purple); }
+    .livecoding .portal-cta { color: var(--orange); }
     .arrow { font-size: 18px; transition: transform .2s; }
     .portal-card:hover .arrow { transform: translateX(5px); }
 
@@ -466,13 +472,14 @@
   </div>
   <!-- ── end mascot ── -->
 
-  <h1>Hire Smarter.<br/>Interview at Scale.</h1>
+  <h1>Every Great Hire<br/>Starts With a Story.</h1>
   <p class="subtitle">
-    AI-powered screening interviews. Create a room, share the code, and let the
-    agent evaluate every candidate against your exact requirements.
+    Behind every resume is a person waiting to be truly seen.
+    We help recruiters find the talent that genuinely fits —
+    and help every candidate find the place where they belong.
   </p>
 
-  <div class="portals">
+  <div class="portals" style="max-width:1020px">
     <a href="/recruiter" class="portal-card recruiter">
       <div class="portal-icon">💼</div>
       <div class="portal-title">Recruiter Portal</div>
@@ -492,6 +499,16 @@
       </p>
       <div class="portal-cta">Go to Candidate Portal <span class="arrow">→</span></div>
     </a>
+
+    <a href="/livecoding" class="portal-card livecoding">
+      <div class="portal-icon">💻</div>
+      <div class="portal-title">Live Coding</div>
+      <p class="portal-desc">
+        Tackle real coding challenges with an AI challenger — refine your
+        approach and prove your problem-solving skills under the clock.
+      </p>
+      <div class="portal-cta">Start Coding <span class="arrow">→</span></div>
+    </a>
   </div>
 
   <div class="features">
@@ -501,6 +518,8 @@
     <div class="feat-tag"><span>✦</span>Bias Detection</div>
     <div class="feat-tag"><span>✦</span>Skill Matching</div>
     <div class="feat-tag"><span>✦</span>Benchmark Analysis</div>
+    <div class="feat-tag"><span>✦</span>Live Code Challenge</div>
+    <div class="feat-tag"><span>✦</span>Emotion Detection</div>
   </div>
 </body>
 </html>

@@ -37,12 +37,16 @@ app.get("/candidate", (req, res) =>
 app.get("/results", (req, res) =>
   res.sendFile(path.join(__dirname, "public", "results.html"))
 );
+app.get("/livecoding", (req, res) =>
+  res.sendFile(path.join(__dirname, "public", "livecoding.html"))
+);
 
 // ─── Start ─────────────────────────────────────────────────────────────────────
 const server = app.listen(PORT, () => {
   console.log(`\n🚀  AI Interview Frontend  →  http://localhost:${PORT}`);
   console.log(`   Recruiter portal       →  http://localhost:${PORT}/recruiter`);
   console.log(`   Candidate portal       →  http://localhost:${PORT}/candidate`);
+  console.log(`   Live Coding portal     →  http://localhost:${PORT}/livecoding`);
   console.log(`   API proxied to         →  ${BACKEND}\n`);
 });
 

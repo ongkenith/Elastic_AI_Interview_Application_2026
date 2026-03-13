@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Live Coding Challenge — AI Interview System</title>
+
+  <!-- CodeMirror 5 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/monokai.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+
+  <!-- face-api.js for emotion detection -->
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f; --surface: #14141c; --surface2: #1c1c28;
+      --border: #2a2a3a; --blue: #4f8ef7; --green: #34d399;
+      --yellow: #fbbf24; --red: #f87171; --purple: #a78bfa;
+      --orange: #fb923c; --text: #f0f0f5; --sub: #8888aa;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+    /* ── Screens ── */
+    .screen { display: none; height: 100vh; }
+    .screen.active { display: flex; }
+
+    /* ══════════════ ENTRY SCREEN ══════════════ */
+    #screen-entry {
+      flex-direction: column; align-items: center; justify-content: center;
+      padding: 32px 24px; overflow-y: auto;
+    }
+    .entry-logo { font-size: 12px; font-weight: 700; letter-spacing: 3px; color: var(--sub);
+                  text-transform: uppercase; margin-bottom: 48px; }
+    .entry-logo span { color: var(--orange); }
+    .entry-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+      padding: 40px 36px; width: 100%; max-width: 460px;
+    }
+    .entry-icon { font-size: 40px; margin-bottom: 16px; text-align: center; }
+    .entry-card h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; text-align: center; }
+    .entry-card p { font-size: 14px; color: var(--sub); margin-bottom: 28px; line-height: 1.6; text-align: center; }
+    .form-group { margin-bottom: 16px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    label { display: block; font-size: 11px; font-weight: 700; color: var(--sub);
+            margin-bottom: 6px; letter-spacing: .5px; text-transform: uppercase; }
+    input[type=text], input[type=email] {
+      width: 100%; padding: 12px 14px; background: var(--surface2);
+      border: 1.5px solid var(--border); border-radius: 10px;
+      color: var(--text); font-size: 14px; font-family: inherit; outline: none;
+      transition: border-color .2s;
+    }
+    input:focus { border-color: var(--orange); }
+    ::placeholder { color: var(--sub); }
+    .code-input {
+      font-size: 22px; font-weight: 800; letter-spacing: 6px; text-align: center;
+      text-transform: uppercase;
+    }
+    .btn {
+      width: 100%; padding: 13px; border-radius: 10px; border: none; cursor: pointer;
+      font-size: 15px; font-weight: 700; transition: opacity .15s; font-family: inherit;
+    }
+    .btn:hover { opacity: .88; } .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-orange { background: var(--orange); color: #fff; }
+    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3);
+            border-top-color: #fff; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes sp { to { transform: rotate(360deg); } }
+    .error-msg { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.25);
+                 color: var(--red); padding: 12px 14px; border-radius: 8px; font-size: 13px;
+                 margin-bottom: 14px; display: none; }
+
+    /* ══════════════ LIVE CODING SCREEN ══════════════ */
+    #screen-coding {
+      flex-direction: column; height: 100vh; overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .lc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 20px; background: var(--surface);
+      border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 16px;
+    }
+    .lc-header-left { display: flex; align-items: center; gap: 16px; }
+    .lc-brand { font-size: 13px; font-weight: 800; letter-spacing: .5px; }
+    .lc-brand span { color: var(--orange); }
+    .q-nav { display: flex; align-items: center; gap: 8px; }
+    .q-nav-btn {
+      width: 30px; height: 30px; border-radius: 6px; border: none; cursor: pointer;
+      background: var(--surface2); color: var(--text); font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    .q-nav-btn:hover { background: var(--border); }
+    .q-nav-btn:disabled { opacity: .3; cursor: not-allowed; }
+    .q-counter { font-size: 13px; font-weight: 700; color: var(--sub);
+                 padding: 4px 12px; background: var(--surface2);
+                 border: 1px solid var(--border); border-radius: 6px; }
+    .lc-header-center { display: flex; align-items: center; gap: 12px; }
+    .room-pill {
+      font-size: 11px; font-weight: 800; letter-spacing: 2px; padding: 4px 12px;
+      background: rgba(251,146,60,.12); border: 1px solid rgba(251,146,60,.3);
+      color: var(--orange); border-radius: 6px; font-family: 'Courier New', monospace;
+    }
+    .timer {
+      font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;
+      color: var(--text); min-width: 72px; text-align: center;
+    }
+    .timer.warn { color: var(--yellow); }
+    .timer.danger { color: var(--red); animation: pulse 1s ease infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    .lc-header-right { display: flex; align-items: center; gap: 12px; }
+    .webcam-wrap {
+      position: relative; width: 52px; height: 40px; border-radius: 6px;
+      overflow: hidden; border: 1.5px solid var(--border); flex-shrink: 0;
+    }
+    #webcam-feed { width: 100%; height: 100%; object-fit: cover; }
+    .emotion-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 6px;
+      background: rgba(0,0,0,.75); color: var(--green);
+      border-radius: 3px; text-transform: uppercase; letter-spacing: .5px;
+      white-space: nowrap;
+    }
+
+    /* ── Main layout (question + editor) ── */
+    .lc-body {
+      flex: 1; display: grid; grid-template-columns: 40% 60%;
+      overflow: hidden; min-height: 0;
+    }
+
+    /* ── Question Panel ── */
+    .question-panel {
+      border-right: 1px solid var(--border); overflow-y: auto;
+      padding: 24px; display: flex; flex-direction: column; gap: 16px;
+    }
+    .diff-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 800; letter-spacing: .5px;
+      text-transform: uppercase; padding: 3px 10px; border-radius: 5px;
+    }
+    .diff-easy   { background: rgba(52,211,153,.15); color: var(--green); }
+    .diff-medium { background: rgba(251,191,36,.15);  color: var(--yellow); }
+    .diff-hard   { background: rgba(248,113,113,.15); color: var(--red); }
+    .q-title { font-size: 20px; font-weight: 800; line-height: 1.3; }
+    .q-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .q-tag {
+      font-size: 11px; padding: 2px 8px; border-radius: 4px;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--sub);
+    }
+    .q-section-label {
+      font-size: 11px; font-weight: 700; color: var(--sub); text-transform: uppercase;
+      letter-spacing: .5px; margin-bottom: 8px;
+    }
+    .q-description { font-size: 14px; color: var(--text); line-height: 1.75; white-space: pre-wrap; }
+    .q-examples { display: flex; flex-direction: column; gap: 10px; }
+    .q-example {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px; font-size: 13px;
+    }
+    .q-example .ex-label { font-size: 11px; color: var(--sub); font-weight: 700;
+                           text-transform: uppercase; margin-bottom: 6px; }
+    .q-example code { font-family: 'Courier New', monospace; color: var(--blue); }
+    .q-constraints { font-size: 13px; color: var(--sub); line-height: 1.7; white-space: pre-wrap; }
+
+    /* ── Editor Panel ── */
+    .editor-panel {
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .editor-toolbar {
+      display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+      background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .lang-select {
+      padding: 6px 12px; background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px; font-family: inherit;
+      outline: none; cursor: pointer;
+    }
+    .lang-select:focus { border-color: var(--orange); }
+    .run-btn {
+      padding: 7px 16px; border: none; border-radius: 8px; cursor: pointer;
+      font-size: 13px; font-weight: 700; font-family: inherit;
+      background: var(--green); color: #0a0a0f; transition: opacity .15s;
+    }
+    .run-btn:hover { opacity: .85; }
+    .run-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .submit-btn {
+      padding: 7px 16px; border: none; border-radius: 8px; cursor: pointer;
+      font-size: 13px; font-weight: 700; font-family: inherit;
+      background: var(--orange); color: #fff; transition: opacity .15s; margin-left: auto;
+    }
+    .submit-btn:hover { opacity: .85; }
+    .challenge-btn {
+      padding: 7px 14px; border: 1px solid rgba(167,139,250,.3); border-radius: 8px; cursor: pointer;
+      font-size: 12px; font-weight: 700; font-family: inherit;
+      background: rgba(167,139,250,.1); color: var(--purple); transition: all .15s;
+    }
+    .challenge-btn:hover { background: rgba(167,139,250,.2); }
+
+    /* CodeMirror overrides */
+    .editor-wrap { flex: 1; overflow: hidden; min-height: 0; position: relative; }
+    .CodeMirror {
+      height: 100% !important; font-size: 14px; font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      background: #1a1a26 !important; line-height: 1.6;
+    }
+    .CodeMirror-scroll { overflow-y: auto !important; }
+
+    /* ── Output panel ── */
+    .output-panel {
+      flex-shrink: 0; border-top: 1px solid var(--border);
+      background: var(--surface); max-height: 180px; overflow-y: auto;
+      transition: max-height .25s ease;
+    }
+    .output-panel.collapsed { max-height: 36px; overflow: hidden; }
+    .output-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px; cursor: pointer; user-select: none;
+    }
+    .output-header span { font-size: 12px; font-weight: 700; color: var(--sub);
+                          text-transform: uppercase; letter-spacing: .5px; }
+    .output-toggle { font-size: 12px; color: var(--sub); }
+    .output-content {
+      padding: 4px 16px 12px; font-family: 'Courier New', monospace;
+      font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+    }
+    .out-stdout { color: var(--text); }
+    .out-stderr { color: var(--red); }
+    .out-meta   { color: var(--sub); font-size: 11px; }
+
+    /* ── Challenger panel (bottom-right floating) ── */
+    .challenger-panel {
+      position: fixed; bottom: 20px; right: 20px; width: 360px;
+      background: var(--surface); border: 1px solid rgba(167,139,250,.35);
+      border-radius: 16px; box-shadow: 0 8px 40px rgba(0,0,0,.5);
+      display: flex; flex-direction: column; z-index: 200;
+      max-height: 480px; transition: max-height .25s ease, box-shadow .2s;
+    }
+    .challenger-panel.collapsed { max-height: 48px; overflow: hidden; }
+    .challenger-panel:hover { box-shadow: 0 8px 60px rgba(167,139,250,.15); }
+    .ch-header {
+      display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+      cursor: pointer; flex-shrink: 0; border-radius: 16px 16px 0 0;
+      background: linear-gradient(135deg, rgba(167,139,250,.12), rgba(79,142,247,.08));
+      border-bottom: 1px solid rgba(167,139,250,.2);
+    }
+    .ch-icon {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--purple), var(--blue));
+      display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+    }
+    .ch-title { flex: 1; }
+    .ch-title strong { font-size: 13px; font-weight: 800; display: block; }
+    .ch-title small { font-size: 11px; color: var(--sub); }
+    .ch-collapse { font-size: 16px; color: var(--sub); padding: 2px; }
+    .ch-body { flex: 1; overflow-y: auto; padding: 12px 14px;
+               display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+    .ch-msg {
+      padding: 10px 13px; border-radius: 10px; font-size: 13px;
+      line-height: 1.6; animation: fadeUp .2s ease;
+    }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .ch-msg.challenger {
+      background: rgba(167,139,250,.1); border: 1px solid rgba(167,139,250,.2);
+      color: var(--text); border-bottom-left-radius: 3px;
+    }
+    .ch-msg.candidate {
+      background: rgba(79,142,247,.1); border: 1px solid rgba(79,142,247,.2);
+      color: var(--text); border-bottom-right-radius: 3px; align-self: flex-end;
+      max-width: 85%;
+    }
+    .ch-typing { display: flex; gap: 4px; align-items: center; padding: 8px 12px; }
+    .ch-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--purple);
+              animation: bounce 1.2s ease infinite; }
+    .ch-dot:nth-child(2) { animation-delay: .2s; }
+    .ch-dot:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
+    .ch-footer {
+      display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); flex-shrink: 0;
+    }
+    .ch-input {
+      flex: 1; padding: 8px 12px; background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px; font-family: inherit; outline: none;
+      transition: border-color .2s;
+    }
+    .ch-input:focus { border-color: var(--purple); }
+    .ch-send {
+      padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer;
+      background: var(--purple); color: #fff; font-size: 13px; font-weight: 700;
+      font-family: inherit; transition: opacity .15s;
+    }
+    .ch-send:hover { opacity: .85; }
+
+    /* ── Completion overlay ── */
+    #overlay-complete {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85);
+      z-index: 500; align-items: center; justify-content: center;
+    }
+    #overlay-complete.active { display: flex; }
+    .complete-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+      padding: 48px 40px; text-align: center; max-width: 440px; width: 100%;
+    }
+    .complete-icon { font-size: 56px; margin-bottom: 20px; }
+    .complete-card h2 { font-size: 26px; font-weight: 800; margin-bottom: 12px; }
+    .complete-card p { color: var(--sub); font-size: 14px; line-height: 1.6; margin-bottom: 28px; }
+    .complete-stat { font-size: 13px; color: var(--sub); margin-bottom: 8px; }
+    .complete-stat strong { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════ SCREEN 1: ENTRY ══════════════════════ -->
+<div id="screen-entry" class="screen active">
+  <div class="entry-logo">AI <span>Live Coding</span> Challenge</div>
+  <div class="entry-card">
+    <div class="entry-icon">💻</div>
+    <h2>Join Coding Round</h2>
+    <p>Enter your room code and details to begin the live coding challenge.</p>
+    <div id="entry-error" class="error-msg"></div>
+    <div class="form-group">
+      <label>Room Code</label>
+      <input id="inp-code" class="code-input" type="text" placeholder="LC-XXXX" maxlength="7"
+             oninput="this.value=this.value.toUpperCase()"/>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Your Name</label>
+        <input id="inp-name" type="text" placeholder="Jane Smith"/>
+      </div>
+      <div>
+        <label>Email</label>
+        <input id="inp-email" type="email" placeholder="jane@example.com"/>
+      </div>
+    </div>
+    <button class="btn btn-orange" id="join-btn" onclick="joinRoom()">
+      Enter Coding Room →
+    </button>
+    <div style="margin-top:16px;text-align:center">
+      <a href="/" style="font-size:13px;color:var(--sub);text-decoration:none">← Back to Home</a>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ SCREEN 2: LIVE CODING ══════════════════════ -->
+<div id="screen-coding" class="screen">
+
+  <!-- Header -->
+  <header class="lc-header">
+    <div class="lc-header-left">
+      <div class="lc-brand">AI <span>Live Coding</span></div>
+      <div class="q-nav">
+        <button class="q-nav-btn" id="btn-prev" onclick="prevQuestion()">‹</button>
+        <div class="q-counter" id="q-counter">1 / 1</div>
+        <button class="q-nav-btn" id="btn-next" onclick="nextQuestion()">›</button>
+      </div>
+    </div>
+    <div class="lc-header-center">
+      <div class="room-pill" id="header-room-code">LC-XXXX</div>
+      <div class="timer" id="timer">--:--</div>
+    </div>
+    <div class="lc-header-right">
+      <div class="emotion-badge" id="emotion-badge">😐 Neutral</div>
+      <div class="webcam-wrap">
+        <video id="webcam-feed" autoplay muted playsinline></video>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main body: question + editor -->
+  <div class="lc-body">
+
+    <!-- Left: Question panel -->
+    <div class="question-panel" id="question-panel">
+      <!-- Populated by JS -->
+    </div>
+
+    <!-- Right: Editor panel -->
+    <div class="editor-panel">
+      <!-- Toolbar -->
+      <div class="editor-toolbar">
+        <select class="lang-select" id="lang-select" onchange="switchLanguage()">
+          <option value="python">Python</option>
+          <option value="javascript">JavaScript</option>
+        </select>
+        <button class="run-btn" id="run-btn" onclick="runCode()">▶ Run</button>
+        <button class="challenge-btn" onclick="requestChallenge()">🤖 Challenge me</button>
+        <button class="submit-btn" id="submit-btn" onclick="submitQuestion()">Submit →</button>
+      </div>
+
+      <!-- CodeMirror -->
+      <div class="editor-wrap" id="editor-wrap">
+        <textarea id="code-editor"></textarea>
+      </div>
+
+      <!-- Output -->
+      <div class="output-panel" id="output-panel">
+        <div class="output-header" onclick="toggleOutput()">
+          <span id="output-label">Output</span>
+          <span class="output-toggle" id="output-toggle">▲</span>
+        </div>
+        <div class="output-content" id="output-content">
+          <span class="out-meta">Run your code to see output here.</span>
+        </div>
+      </div>
+    </div>
+  </div><!-- /lc-body -->
+</div><!-- /screen-coding -->
+
+<!-- Challenger Panel (always visible during coding) -->
+<div class="challenger-panel" id="challenger-panel" style="display:none">
+  <div class="ch-header" onclick="toggleChallenger()">
+    <div class="ch-icon">🤖</div>
+    <div class="ch-title">
+      <strong>Code Challenger</strong>
+      <small id="ch-status">Watching your code…</small>
+    </div>
+    <span class="ch-collapse" id="ch-collapse-icon">▼</span>
+  </div>
+  <div class="ch-body" id="ch-body"></div>
+  <div class="ch-footer">
+    <input class="ch-input" id="ch-input" type="text" placeholder="Ask a question (I won't give you the answer)…"
+           onkeydown="if(event.key==='Enter') sendChallengerMessage()"/>
+    <button class="ch-send" onclick="sendChallengerMessage()">Send</button>
+  </div>
+</div>
+
+<!-- Completion overlay -->
+<div id="overlay-complete">
+  <div class="complete-card">
+    <div class="complete-icon">🏁</div>
+    <h2>Challenge Complete!</h2>
+    <p>Your code submissions have been recorded. The recruiter will review your solutions and get back to you.</p>
+    <div class="complete-stat">Questions solved: <strong id="complete-solved">0</strong></div>
+    <div class="complete-stat">Session ID: <strong id="complete-session"></strong></div>
+    <button class="btn btn-orange" onclick="window.location.href='/'" style="margin-top:20px">Back to Home</button>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let sessionId = '';
+let candidateId = '';
+let questions = [];
+let currentQIndex = 0;
+let roomData = {};
+let ws = null;
+let editor = null;
+let codeByQuestion = {};   // { [qIndex]: { python: '', javascript: '' } }
+let timerInterval = null;
+let timeLimitSec = 3600;
+let secondsLeft = 3600;
+let outputCollapsed = false;
+let challengerCollapsed = false;
+let challengerTimeout = null;
+let challengerReviewDelay = 25000;  // auto-review after 25s idle
+let emotionInterval = null;
+let submitCount = 0;
+
+// ─── Entry ────────────────────────────────────────────────────────────────────
+async function joinRoom() {
+  const code  = document.getElementById('inp-code').value.trim().toUpperCase();
+  const name  = document.getElementById('inp-name').value.trim();
+  const email = document.getElementById('inp-email').value.trim();
+  const errEl = document.getElementById('entry-error');
+  const btn   = document.getElementById('join-btn');
+
+  if (!code)  { showEntryError('Please enter a room code.'); return; }
+  if (!name)  { showEntryError('Please enter your name.'); return; }
+  if (!email) { showEntryError('Please enter your email.'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Joining…';
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch(`${API}/live-coding/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_code: code, name, email }),
+    });
+    if (!res.ok) {
+      const e = await res.json();
+      throw new Error(e.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    sessionId   = data.session_id;
+    candidateId = data.candidate_id;
+    questions   = data.questions;
+    roomData    = data.room;
+    timeLimitSec = (roomData.time_limit_minutes || 60) * 60;
+    secondsLeft  = timeLimitSec;
+
+    // Init code buffers
+    questions.forEach((q, i) => {
+      codeByQuestion[i] = {
+        python:     q.starter_code_python || 'def solution():\n    pass\n',
+        javascript: q.starter_code_js     || 'function solution() {\n  \n}\n',
+      };
+    });
+
+    startCodingScreen();
+  } catch (err) {
+    showEntryError(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Enter Coding Room →';
+  }
+}
+
+function showEntryError(msg) {
+  const el = document.getElementById('entry-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// ─── Start coding screen ──────────────────────────────────────────────────────
+function startCodingScreen() {
+  document.getElementById('screen-entry').classList.remove('active');
+  document.getElementById('screen-coding').classList.add('active');
+  document.getElementById('challenger-panel').style.display = 'flex';
+
+  document.getElementById('header-room-code').textContent = roomData.room_code || '';
+
+  // Init CodeMirror
+  editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+    mode: 'python',
+    theme: 'monokai',
+    lineNumbers: true,
+    matchBrackets: true,
+    autoCloseBrackets: true,
+    indentUnit: 4,
+    tabSize: 4,
+    indentWithTabs: false,
+    lineWrapping: false,
+    extraKeys: { Tab: cm => cm.replaceSelection('    ') },
+  });
+
+  // Auto-save code to buffer on change + debounce challenger
+  editor.on('change', () => {
+    const lang = document.getElementById('lang-select').value;
+    if (!codeByQuestion[currentQIndex]) codeByQuestion[currentQIndex] = {};
+    codeByQuestion[currentQIndex][lang] = editor.getValue();
+    scheduleAutoChallenge();
+  });
+
+  renderQuestion(0);
+  startTimer();
+  connectChallenger();
+  startWebcam();
+}
+
+// ─── Question nav ─────────────────────────────────────────────────────────────
+function renderQuestion(idx) {
+  currentQIndex = idx;
+  const q = questions[idx];
+
+  // Update counter
+  document.getElementById('q-counter').textContent = `${idx + 1} / ${questions.length}`;
+  document.getElementById('btn-prev').disabled = idx === 0;
+  document.getElementById('btn-next').disabled = idx === questions.length - 1;
+
+  // Question panel
+  const diffClass = { easy: 'diff-easy', medium: 'diff-medium', hard: 'diff-hard' }[q.difficulty] || 'diff-medium';
+  const diffLabel = (q.difficulty || 'medium').charAt(0).toUpperCase() + (q.difficulty || 'medium').slice(1);
+
+  const examplesHtml = (q.examples || []).map((ex, i) => `
+    <div class="q-example">
+      <div class="ex-label">Example ${i + 1}</div>
+      ${ex.input  !== undefined ? `<div>Input: <code>${escHtml(String(ex.input))}</code></div>` : ''}
+      ${ex.output !== undefined ? `<div>Output: <code>${escHtml(String(ex.output))}</code></div>` : ''}
+      ${ex.explanation ? `<div style="color:var(--sub);margin-top:4px">${escHtml(ex.explanation)}</div>` : ''}
+    </div>`).join('');
+
+  document.getElementById('question-panel').innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="diff-badge ${diffClass}">${diffLabel}</span>
+      ${(q.tags || []).map(t => `<span class="q-tag">${escHtml(t)}</span>`).join('')}
+    </div>
+    <div class="q-title">${escHtml(q.title)}</div>
+    <div>
+      <div class="q-section-label">Description</div>
+      <div class="q-description">${escHtml(q.description)}</div>
+    </div>
+    ${q.examples && q.examples.length ? `
+    <div>
+      <div class="q-section-label">Examples</div>
+      <div class="q-examples">${examplesHtml}</div>
+    </div>` : ''}
+    ${q.constraints ? `
+    <div>
+      <div class="q-section-label">Constraints</div>
+      <div class="q-constraints">${escHtml(q.constraints)}</div>
+    </div>` : ''}
+  `;
+
+  // Restore saved code for this question
+  const lang = document.getElementById('lang-select').value;
+  const saved = codeByQuestion[idx]?.[lang] || '';
+  editor.setValue(saved);
+  editor.clearHistory();
+
+  // Reset output
+  document.getElementById('output-content').innerHTML = '<span class="out-meta">Run your code to see output here.</span>';
+  document.getElementById('output-label').textContent = 'Output';
+}
+
+function prevQuestion() {
+  if (currentQIndex > 0) renderQuestion(currentQIndex - 1);
+}
+function nextQuestion() {
+  if (currentQIndex < questions.length - 1) renderQuestion(currentQIndex + 1);
+}
+
+// ─── Language switch ──────────────────────────────────────────────────────────
+function switchLanguage() {
+  const lang = document.getElementById('lang-select').value;
+  // Save current code
+  const prev = document.getElementById('lang-select').dataset.prev || 'python';
+  if (!codeByQuestion[currentQIndex]) codeByQuestion[currentQIndex] = {};
+  codeByQuestion[currentQIndex][prev] = editor.getValue();
+  document.getElementById('lang-select').dataset.prev = lang;
+
+  // Switch mode
+  editor.setOption('mode', lang === 'python' ? 'python' : 'javascript');
+
+  // Load saved or starter code
+  const code = codeByQuestion[currentQIndex]?.[lang] ||
+    (lang === 'python'
+      ? questions[currentQIndex].starter_code_python || 'def solution():\n    pass\n'
+      : questions[currentQIndex].starter_code_js     || 'function solution() {\n  \n}\n');
+  editor.setValue(code);
+}
+
+// ─── Run code ─────────────────────────────────────────────────────────────────
+async function runCode() {
+  const btn  = document.getElementById('run-btn');
+  const lang = document.getElementById('lang-select').value;
+  const code = editor.getValue();
+  btn.disabled = true;
+  btn.textContent = '⏳ Running…';
+
+  // Open output
+  const outPanel = document.getElementById('output-panel');
+  if (outputCollapsed) toggleOutput();
+
+  document.getElementById('output-content').innerHTML = '<span class="out-meta">Running…</span>';
+  document.getElementById('output-label').textContent = 'Output';
+
+  try {
+    const res = await fetch(`${API}/code/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, language: lang, session_id: sessionId }),
+    });
+    const data = await res.json();
+    const meta = data.runtime_ms !== null ? `Runtime: ${data.runtime_ms}ms  |  Exit code: ${data.returncode}` : '';
+    document.getElementById('output-content').innerHTML =
+      (data.stdout ? `<div class="out-stdout">${escHtml(data.stdout)}</div>` : '') +
+      (data.stderr ? `<div class="out-stderr">${escHtml(data.stderr)}</div>` : '') +
+      (meta        ? `<div class="out-meta" style="margin-top:6px">${meta}</div>` : '');
+    document.getElementById('output-label').textContent =
+      data.returncode === 0 ? 'Output ✅' : 'Output ❌';
+  } catch (e) {
+    document.getElementById('output-content').innerHTML = `<div class="out-stderr">Network error: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ Run';
+  }
+}
+
+function toggleOutput() {
+  outputCollapsed = !outputCollapsed;
+  document.getElementById('output-panel').classList.toggle('collapsed', outputCollapsed);
+  document.getElementById('output-toggle').textContent = outputCollapsed ? '▼' : '▲';
+}
+
+// ─── Submit question ──────────────────────────────────────────────────────────
+function submitQuestion() {
+  const code = editor.getValue();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'submit', code, question_index: currentQIndex }));
+  }
+  submitCount++;
+  if (currentQIndex < questions.length - 1) {
+    nextQuestion();
+    appendChallenge(`Question ${currentQIndex} submitted. Question ${currentQIndex + 1} awaits — stay sharp.`);
+  } else {
+    finishSession();
+  }
+}
+
+function finishSession() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'complete' }));
+  }
+  clearInterval(timerInterval);
+  stopEmotionDetection();
+  document.getElementById('complete-solved').textContent = submitCount;
+  document.getElementById('complete-session').textContent = sessionId;
+  document.getElementById('overlay-complete').classList.add('active');
+}
+
+// ─── Timer ────────────────────────────────────────────────────────────────────
+function startTimer() {
+  const el = document.getElementById('timer');
+  timerInterval = setInterval(() => {
+    secondsLeft--;
+    const m = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+    const s = String(secondsLeft % 60).padStart(2, '0');
+    el.textContent = `${m}:${s}`;
+    el.classList.toggle('warn',   secondsLeft <= 600 && secondsLeft > 120);
+    el.classList.toggle('danger', secondsLeft <= 120);
+    if (secondsLeft <= 0) {
+      clearInterval(timerInterval);
+      el.textContent = '00:00';
+      finishSession();
+    }
+  }, 1000);
+}
+
+// ─── Challenger WebSocket ─────────────────────────────────────────────────────
+function connectChallenger() {
+  const url = `${WS_BASE}/challenger/${sessionId}`;
+  ws = new WebSocket(url);
+  ws.onopen  = () => { document.getElementById('ch-status').textContent = 'Connected — watching your code…'; };
+  ws.onclose = () => { document.getElementById('ch-status').textContent = 'Disconnected'; };
+  ws.onerror = () => { document.getElementById('ch-status').textContent = 'Connection error'; };
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'typing') {
+      showChallengerTyping();
+    } else if (msg.type === 'challenge' || msg.type === 'ack' || msg.type === 'complete') {
+      hideChallengerTyping();
+      appendChallenge(msg.message);
+    }
+  };
+}
+
+function scheduleAutoChallenge() {
+  clearTimeout(challengerTimeout);
+  challengerTimeout = setTimeout(requestChallenge, challengerReviewDelay);
+}
+
+function requestChallenge() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const code     = editor.getValue().trim();
+  const question = buildQuestionContext();
+  if (!code || code.length < 10) return;
+  ws.send(JSON.stringify({ type: 'code', code, language: document.getElementById('lang-select').value, question }));
+}
+
+function sendChallengerMessage() {
+  const inp = document.getElementById('ch-input');
+  const msg = inp.value.trim();
+  if (!msg || !ws || ws.readyState !== WebSocket.OPEN) return;
+  inp.value = '';
+  appendCandidateMsg(msg);
+  ws.send(JSON.stringify({ type: 'ask', message: msg, question: buildQuestionContext() }));
+}
+
+function buildQuestionContext() {
+  const q = questions[currentQIndex];
+  return q ? `${q.title}: ${q.description.slice(0, 300)}` : '';
+}
+
+function appendChallenge(text) {
+  const body = document.getElementById('ch-body');
+  const el   = document.createElement('div');
+  el.className = 'ch-msg challenger';
+  el.textContent = text;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+  // Auto-expand challenger if collapsed
+  if (challengerCollapsed) toggleChallenger();
+}
+
+function appendCandidateMsg(text) {
+  const body = document.getElementById('ch-body');
+  const el   = document.createElement('div');
+  el.className = 'ch-msg candidate';
+  el.textContent = text;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+}
+
+let _typingEl = null;
+function showChallengerTyping() {
+  if (_typingEl) return;
+  const body = document.getElementById('ch-body');
+  _typingEl = document.createElement('div');
+  _typingEl.className = 'ch-typing';
+  _typingEl.innerHTML = '<div class="ch-dot"></div><div class="ch-dot"></div><div class="ch-dot"></div>';
+  body.appendChild(_typingEl);
+  body.scrollTop = body.scrollHeight;
+}
+function hideChallengerTyping() {
+  if (_typingEl) { _typingEl.remove(); _typingEl = null; }
+}
+
+function toggleChallenger() {
+  challengerCollapsed = !challengerCollapsed;
+  document.getElementById('challenger-panel').classList.toggle('collapsed', challengerCollapsed);
+  document.getElementById('ch-collapse-icon').textContent = challengerCollapsed ? '▲' : '▼';
+}
+
+// ─── Webcam + Emotion Detection ───────────────────────────────────────────────
+const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+let faceApiReady = false;
+const EMOTION_EMOJIS = { neutral:'😐', happy:'😊', sad:'😔', angry:'😠', fearful:'😨', disgusted:'🤢', surprised:'😲' };
+
+async function startWebcam() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 160, height: 120 } });
+    const video  = document.getElementById('webcam-feed');
+    video.srcObject = stream;
+    await video.play();
+    // Load face-api models
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+    faceApiReady = true;
+    emotionInterval = setInterval(detectEmotion, 5000);
+  } catch (e) {
+    // Webcam denied or face-api failed — continue without emotion detection
+    document.getElementById('emotion-badge').textContent = '📷 No camera';
+    document.getElementById('webcam-wrap') && (document.getElementById('webcam-wrap').style.display = 'none');
+  }
+}
+
+async function detectEmotion() {
+  if (!faceApiReady) return;
+  const video = document.getElementById('webcam-feed');
+  try {
+    const detections = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      .withFaceExpressions();
+    if (!detections) return;
+    // Find dominant expression
+    const expr = detections.expressions;
+    const dominant = Object.entries(expr).reduce((a,b) => b[1] > a[1] ? b : a);
+    const [emotion, confidence] = dominant;
+    const emoji = EMOTION_EMOJIS[emotion] || '😐';
+    document.getElementById('emotion-badge').textContent = `${emoji} ${emotion.charAt(0).toUpperCase() + emotion.slice(1)}`;
+    // Save to backend
+    if (sessionId) {
+      fetch(`${API}/emotions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          timestamp: new Date().toISOString(),
+          emotion,
+          confidence: parseFloat(confidence.toFixed(3)),
+        }),
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+
+function stopEmotionDetection() {
+  clearInterval(emotionInterval);
+  const video = document.getElementById('webcam-feed');
+  if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+</script>
+</body>
+</html>

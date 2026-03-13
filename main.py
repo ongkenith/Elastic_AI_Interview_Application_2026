@@ -191,6 +191,13 @@ def results_page():
     return FileResponse(str(FRONTEND_DIR / "results.html"))
 
 
+@app.get("/livecoding")
+@app.get("/livecoding.html")
+def livecoding_page():
+    """Serve the live coding candidate portal."""
+    return FileResponse(str(FRONTEND_DIR / "livecoding.html"))
+
+
 @app.get("/recruiter")
 def recruiter_portal():
     """Serve the recruiter portal (legacy path)."""
@@ -1296,6 +1303,31 @@ async def interview_ws(
         },
     )
 
+    # ── Load candidate resume + job requirements for context injection ────────
+    _candidate_resume = ""
+    _candidate_name = ""
+    _job_title = ""
+    _job_required_skills: list[str] = []
+    _job_description = ""
+    try:
+        cp = es.get(index="candidate_profile_index", id=candidate_id)["_source"]
+        _candidate_resume = cp.get("resume_text", "") or ""
+        _candidate_name   = cp.get("name", "") or ""
+    except Exception:
+        pass
+    try:
+        jr = es.search(
+            index="job_requirements_index", size=1,
+            query={"term": {"job_id": job_id}},
+        )
+        if jr["hits"]["hits"]:
+            jd = jr["hits"]["hits"][0]["_source"]
+            _job_title           = jd.get("title", "")
+            _job_required_skills = jd.get("required_skills", [])
+            _job_description     = jd.get("description", "")
+    except Exception:
+        pass
+
     # ── Kibana Agent Builder auth ─────────────────────────────────────────────
     # The /api/agent_builder/converse endpoint requires manage_onechat privilege.
     # A scoped Kibana API key typically only has read_onechat, so we always use
@@ -1305,6 +1337,8 @@ async def interview_ws(
 
     # Initialise per-session conversation history
     history = _session_history.setdefault(session_id, [])
+    # Track every question the agent has already asked (persists for full session)
+    _asked_questions: list[str] = []
 
     # ── Live mode — Elastic Agent Builder /api/agent_builder/converse ─────────
 
@@ -1318,19 +1352,29 @@ async def interview_ws(
         history_text = "\n".join(
             f"{m['role'].upper()}: {m['content']}" for m in history[-10:]
         )
+        # Resume snippet: first 1200 chars is usually enough to ground questions
+        resume_snippet = _candidate_resume[:1200].strip()
+        skills_line = ", ".join(_job_required_skills[:12]) if _job_required_skills else "not specified"
+        # Build the already-asked block so the agent can never repeat
+        asked_block = ""
+        if _asked_questions:
+            bullets = "\n".join(f"  - {q}" for q in _asked_questions)
+            asked_block = f"\n[QUESTIONS YOU HAVE ALREADY ASKED — DO NOT REPEAT OR PARAPHRASE ANY OF THESE]\n{bullets}\n"
         context_prompt = (
             f"[CONTEXT]\n"
             f"session_id: {session_id}\n"
             f"job_id: {job_id}\n"
             f"candidate_id: {candidate_id}\n"
-            f"\n[PRIOR CONVERSATION]\n{history_text}\n"
-            f"\n[CANDIDATE MESSAGE]\n{user_input}"
-        ) if history else (
-            f"[CONTEXT]\n"
-            f"session_id: {session_id}\n"
-            f"job_id: {job_id}\n"
-            f"candidate_id: {candidate_id}\n"
-            f"\n[CANDIDATE MESSAGE]\n{user_input}"
+            f"candidate_name: {_candidate_name}\n"
+            f"job_title: {_job_title}\n"
+            f"required_skills: {skills_line}\n"
+            + (f"\n[CANDIDATE RESUME]\n{resume_snippet}\n" if resume_snippet else "")
+            + asked_block
+            + (f"\n[PRIOR CONVERSATION]\n{history_text}\n" if history else "")
+            + f"\n[INSTRUCTION]\nYour next question MUST be different from every question listed above."
+              f" For technical questions, reference the candidate's actual resume (companies, tools, projects)."
+              f" Behavioural questions may be open and generic to reveal character."
+              f"\n\n[CANDIDATE MESSAGE]\n{user_input}"
         )
 
         async with httpx.AsyncClient(timeout=8.0) as client:
@@ -1369,6 +1413,8 @@ async def interview_ws(
 
     await websocket.send_json(greeting_payload)
     history.append({"role": "assistant", "content": greeting_text})
+    # Record greeting as first asked item so the intro isn't repeated
+    _asked_questions.append(greeting_text[:120])
 
     # Persist greeting in background
     async def _persist_greeting(msg: str):
@@ -1471,9 +1517,55 @@ async def interview_ws(
 
             agent_text = agent_reply.get("message", "")  # clean text for storage
 
+            # ── Server-side dedup: if reply is too similar to a past question, re-ask ──
+            def _is_repeat(new_msg: str, past: list[str], threshold: float = 0.72) -> bool:
+                """Simple n-gram overlap check — no ML needed."""
+                def _tokens(s: str) -> set[str]:
+                    return set(re.sub(r"[^a-z0-9 ]", " ", s.lower()).split())
+                new_tok = _tokens(new_msg)
+                if not new_tok:
+                    return False
+                for prev in past:
+                    prev_tok = _tokens(prev)
+                    if not prev_tok:
+                        continue
+                    overlap = len(new_tok & prev_tok) / max(len(new_tok), len(prev_tok))
+                    if overlap >= threshold:
+                        log.info("Dedup triggered: new=%r overlaps prev=%r (%.0f%%)", new_msg[:60], prev[:60], overlap*100)
+                        return True
+                return False
+
+            if agent_text and _is_repeat(agent_text, _asked_questions):
+                asked_bullets = "\n".join(f"  - {q}" for q in _asked_questions)
+                rewrite_prompt = (
+                    f"Your last response was too similar to a question you already asked.\n\n"
+                    f"ALREADY ASKED:\n{asked_bullets}\n\n"
+                    f"You MUST ask a completely different question on a NEW topic.\n"
+                    f"Do not rephrase anything from the list above.\n\n"
+                    f"[CANDIDATE MESSAGE]\n{user_msg}"
+                )
+                try:
+                    retry_text = await call_agent(rewrite_prompt)
+                    retry_parsed = json.loads(retry_text) if retry_text.strip().startswith("{") else None
+                    retry_msg = (retry_parsed or {}).get("message", retry_text) if retry_parsed else retry_text
+                    # Only use retry if it's genuinely different
+                    if retry_msg and not _is_repeat(retry_msg, _asked_questions, threshold=0.6):
+                        agent_reply = retry_parsed if retry_parsed else {"role": "assistant", "message": retry_msg}
+                        agent_text = retry_msg
+                    else:
+                        # Final fallback: use local interviewer with explicit exclusion list
+                        agent_reply = _local_interview_reply(history, job_id)
+                        agent_text = agent_reply.get("message", "")
+                except Exception as _retry_exc:
+                    log.warning("Dedup retry failed (%s); using local fallback.", _retry_exc)
+                    agent_reply = _local_interview_reply(history, job_id)
+                    agent_text = agent_reply.get("message", "")
+
             # Persist agent turn in background
             if agent_text:
                 history.append({"role": "assistant", "content": agent_text})
+                # Track every question asked so the agent never repeats one
+                _asked_questions.append(agent_text[:160])
             async def _persist_agent(msg: str):
                 try:
                     emb = await asyncio.get_event_loop().run_in_executor(
@@ -1564,6 +1656,10 @@ async def interview_ws(
             doc={"status": "disconnected", "completed_at": datetime.now(timezone.utc).isoformat()},
         )
         _session_history.pop(session_id, None)
+        # Fire evaluation pipeline even on early disconnect (if enough transcript exists)
+        asyncio.create_task(
+            _run_post_interview_pipeline(session_id, job_id, candidate_id, None)
+        )
     except httpx.HTTPError as exc:
         log.error("Agent relay error  session=%s  %s", session_id, exc)
         await websocket.send_json({"role": "system", "error": str(exc)})
@@ -1830,7 +1926,7 @@ async def _run_post_interview_pipeline(
 # Manual Re-Evaluate endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 
-@app.post("/api/evaluate/{session_id}")
+@app.post("/evaluate/{session_id}")
 async def trigger_evaluation(session_id: str):
     """
     Recruiter can manually trigger (or re-trigger) the post-interview
@@ -1858,7 +1954,7 @@ async def trigger_evaluation(session_id: str):
     return {"status": "evaluation_triggered", "session_id": session_id}
 
 
-@app.get("/api/evaluate/{session_id}")
+@app.get("/evaluate/{session_id}")
 def get_evaluation_status(session_id: str):
     """Poll evaluation status for a session."""
     try:
@@ -2202,3 +2298,620 @@ async def monitor_ws(websocket: WebSocket, session_id: str):
         if websocket in conns:
             conns.remove(websocket)
         log.info("Monitor WS disconnected  session=%s", session_id)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LIVE CODING FEATURE
+# ══════════════════════════════════════════════════════════════════════════════
+
+import subprocess
+import tempfile
+import time
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Live Coding Pydantic Models
+# ──────────────────────────────────────────────────────────────────────────────
+
+class CodingQuestion(BaseModel):
+    title: str
+    description: str
+    difficulty: Optional[str] = "medium"   # easy | medium | hard
+    tags: Optional[List[str]] = []
+    examples: Optional[List[dict]] = []
+    constraints: Optional[str] = ""
+    starter_code_python: Optional[str] = "def solution():\n    pass\n"
+    starter_code_js: Optional[str] = "function solution() {\n  \n}\n"
+
+
+class CodingRoomCreate(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    num_questions: int = 3
+    time_limit_minutes: Optional[int] = 60
+    interviewer_id: Optional[str] = "default_interviewer"
+
+
+class LiveCodingRegister(BaseModel):
+    room_code: str
+    name: str
+    email: str
+
+
+class CodeRunRequest(BaseModel):
+    code: str
+    language: str          # python | javascript
+    session_id: Optional[str] = ""
+
+
+class EmotionSnapshot(BaseModel):
+    session_id: str
+    timestamp: str
+    emotion: str
+    confidence: float
+
+
+def _gen_lc_room_code() -> str:
+    chars = random.choices(string.ascii_uppercase + string.digits, k=4)
+    return "LC-" + "".join(chars)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Local Challenger (fallback when agent is unavailable)
+# ──────────────────────────────────────────────────────────────────────────────
+
+_CHALLENGER_GENERIC = [
+    "What's the time complexity of your current solution? Can you do better?",
+    "What happens if the input is empty or None? Does your code handle that?",
+    "Your variable names are hard to follow — can you make the intent clearer?",
+    "Have you considered edge cases like duplicate values or overflow?",
+    "That approach works, but is there a data structure that could make this O(n) instead?",
+    "What if the array has only one element? Walk me through your code with that input.",
+    "Can you simplify this by breaking it into smaller helper functions?",
+    "Think about the space complexity — are you using more memory than you need?",
+    "Your loop could potentially run out of bounds — are you sure your indices are safe?",
+    "I see you're using a nested loop. Have you considered a two-pointer or sliding-window approach?",
+    "What does your code output when the target doesn't exist in the input? Is that the right behaviour?",
+    "Could you write a test case that would break your current solution?",
+    "There's a more Pythonic way to express this — what built-in functions might help?",
+    "You're modifying the input in place — is that safe if the caller uses it again?",
+    "Think about recursion vs. iteration here. What are the trade-offs?",
+]
+
+_CHALLENGER_NESTED_LOOP = (
+    "I see nested loops — your current complexity looks like O(n²). "
+    "Think about what information you're repeatedly looking up, and whether a hash map could eliminate the inner loop."
+)
+_CHALLENGER_NO_EDGE_CASE = (
+    "Your code looks like it assumes the input is always valid. "
+    "What happens with an empty list, a single element, or negative numbers?"
+)
+_CHALLENGER_LONG_FUNCTION = (
+    "This function is doing a lot of things at once. "
+    "Can you refactor it into smaller, focused functions with descriptive names?"
+)
+
+
+def _local_challenger_response(code: str, question: str, user_msg: str = "") -> str:
+    """Generate a contextual challenge based on simple code heuristics."""
+    if user_msg:
+        # Respond to a direct question without solving it
+        return (
+            "That's an interesting line of thinking. Instead of answering directly, "
+            "I'll ask: what would happen to your approach if the input size was 10 million? "
+            "Think about the implications and try again."
+        )
+    lines = code.splitlines()
+    # Detect nested loops
+    indents = [len(l) - len(l.lstrip()) for l in lines if l.strip().startswith(("for ", "while "))]
+    if len(indents) >= 2 and max(indents) > min(indents):
+        return _CHALLENGER_NESTED_LOOP
+    # Detect very long function
+    if len(lines) > 30:
+        return _CHALLENGER_LONG_FUNCTION
+    # Detect no None/empty checks
+    if "None" not in code and "len(" not in code and "empty" not in code.lower():
+        return _CHALLENGER_NO_EDGE_CASE
+    return random.choice(_CHALLENGER_GENERIC)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Live Coding Room Management
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/coding-rooms", status_code=201)
+async def create_coding_room(body: CodingRoomCreate):
+    """Recruiter creates a live coding room."""
+    for _ in range(5):
+        code = _gen_lc_room_code()
+        existing = es.search(index="live_coding_room_index", size=1, query={"term": {"room_code": code}})
+        if existing["hits"]["total"]["value"] == 0:
+            break
+    room_id = f"lcroom_{uuid.uuid4().hex[:8]}"
+    doc = {
+        "room_id":            room_id,
+        "room_code":          code,
+        "title":              body.title,
+        "description":        body.description,
+        "num_questions":      body.num_questions,
+        "time_limit_minutes": body.time_limit_minutes,
+        "interviewer_id":     body.interviewer_id,
+        "active":             True,
+        "created_at":         datetime.now(timezone.utc).isoformat(),
+    }
+    es.index(index="live_coding_room_index", id=room_id, document=doc, refresh=True)
+    return {"room_code": code, "room_id": room_id}
+
+
+@app.get("/coding-rooms/{room_code}")
+def get_coding_room(room_code: str):
+    """Get live coding room details."""
+    result = es.search(
+        index="live_coding_room_index", size=1,
+        query={"term": {"room_code": room_code.upper()}},
+    )
+    hits = result["hits"]["hits"]
+    if not hits:
+        raise HTTPException(status_code=404, detail="Coding room not found")
+    return hits[0]["_source"]
+
+
+@app.post("/coding-rooms/{room_code}/questions", status_code=201)
+async def add_coding_question(room_code: str, body: CodingQuestion):
+    """Recruiter uploads a coding question to a room."""
+    # Verify room exists
+    result = es.search(index="live_coding_room_index", size=1, query={"term": {"room_code": room_code.upper()}})
+    if result["hits"]["total"]["value"] == 0:
+        raise HTTPException(status_code=404, detail="Coding room not found")
+    question_id = f"q_{uuid.uuid4().hex[:10]}"
+    doc = {
+        "question_id":         question_id,
+        "room_code":           room_code.upper(),
+        "title":               body.title,
+        "description":         body.description,
+        "difficulty":          body.difficulty,
+        "tags":                body.tags,
+        "examples":            body.examples,
+        "constraints":         body.constraints,
+        "starter_code_python": body.starter_code_python,
+        "starter_code_js":     body.starter_code_js,
+        "created_at":          datetime.now(timezone.utc).isoformat(),
+    }
+    es.index(index="coding_questions_index", id=question_id, document=doc, refresh=True)
+    return {"question_id": question_id}
+
+
+@app.get("/coding-rooms/{room_code}/questions")
+def list_coding_questions(room_code: str):
+    """List all questions for a coding room (recruiter view)."""
+    result = es.search(
+        index="coding_questions_index", size=50,
+        query={"term": {"room_code": room_code.upper()}},
+    )
+    questions = [h["_source"] for h in result["hits"]["hits"]]
+    return {"questions": questions, "total": len(questions)}
+
+
+@app.delete("/coding-rooms/{room_code}/questions/{question_id}", status_code=204)
+def delete_coding_question(room_code: str, question_id: str):
+    """Delete a question from a coding room."""
+    try:
+        es.delete(index="coding_questions_index", id=question_id, refresh=True)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+
+@app.get("/coding-rooms/{room_code}/sessions")
+def get_coding_sessions(room_code: str):
+    """Recruiter views all candidate sessions for a coding room."""
+    room_res = es.search(index="live_coding_room_index", size=1, query={"term": {"room_code": room_code.upper()}})
+    if room_res["hits"]["total"]["value"] == 0:
+        raise HTTPException(status_code=404, detail="Coding room not found")
+    room = room_res["hits"]["hits"][0]["_source"]
+    sessions_res = es.search(
+        index="live_coding_session_index", size=200,
+        query={"term": {"room_code": room_code.upper()}},
+        sort=[{"started_at": {"order": "desc"}}],
+    )
+    sessions = [h["_source"] for h in sessions_res["hits"]["hits"]]
+    return {"room": room, "sessions": sessions}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Live Coding Candidate Registration
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/live-coding/register", status_code=201)
+async def register_live_coding(body: LiveCodingRegister):
+    """Candidate registers for a live coding session. Returns session + questions."""
+    room_code = body.room_code.upper()
+    # Get room
+    room_res = es.search(index="live_coding_room_index", size=1, query={"term": {"room_code": room_code}})
+    if room_res["hits"]["total"]["value"] == 0:
+        raise HTTPException(status_code=404, detail="Coding room code not found")
+    room = room_res["hits"]["hits"][0]["_source"]
+
+    # Fetch all questions for this room
+    qs_res = es.search(index="coding_questions_index", size=50, query={"term": {"room_code": room_code}})
+    all_questions = [h["_source"] for h in qs_res["hits"]["hits"]]
+    if not all_questions:
+        raise HTTPException(status_code=422, detail="This room has no questions yet. Ask the recruiter to add questions first.")
+
+    # Randomly pick num_questions (or all if fewer available)
+    n = min(room.get("num_questions", 3), len(all_questions))
+    selected = random.sample(all_questions, n)
+
+    candidate_id = f"lc_cand_{uuid.uuid4().hex[:8]}"
+    session_id   = f"lc_sess_{uuid.uuid4().hex[:10]}"
+
+    session_doc = {
+        "session_id":      session_id,
+        "room_code":       room_code,
+        "candidate_id":    candidate_id,
+        "candidate_name":  body.name,
+        "candidate_email": body.email,
+        "question_ids":    [q["question_id"] for q in selected],
+        "status":          "active",
+        "language":        "python",
+        "code_snapshots":  [],
+        "emotion_timeline":[],
+        "challenger_log":  [],
+        "started_at":      datetime.now(timezone.utc).isoformat(),
+    }
+    es.index(index="live_coding_session_index", id=session_id, document=session_doc, refresh=True)
+
+    return {
+        "session_id":   session_id,
+        "candidate_id": candidate_id,
+        "room":         room,
+        "questions":    selected,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Code Runner
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/code/run")
+async def run_code(body: CodeRunRequest):
+    """Execute candidate code in a subprocess sandbox (10-second timeout)."""
+    start = time.time()
+    lang = body.language.lower()
+
+    if lang not in ("python", "javascript", "js"):
+        raise HTTPException(status_code=400, detail="Supported languages: python, javascript")
+
+    suffix   = ".py" if lang == "python" else ".js"
+    cmd      = ["python3"] if lang == "python" else ["node"]
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False) as f:
+        f.write(body.code)
+        tmppath = f.name
+
+    try:
+        result = subprocess.run(
+            cmd + [tmppath],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd="/tmp",
+        )
+        elapsed_ms = int((time.time() - start) * 1000)
+        return {
+            "stdout":      result.stdout[:8000],
+            "stderr":      result.stderr[:2000],
+            "returncode":  result.returncode,
+            "runtime_ms":  elapsed_ms,
+        }
+    except subprocess.TimeoutExpired:
+        return {"stdout": "", "stderr": "⏱ Time limit exceeded (10 s)", "returncode": -1, "runtime_ms": 10000}
+    except FileNotFoundError:
+        return {"stdout": "", "stderr": f"Runtime not found: {cmd[0]} is not installed on this server.", "returncode": -1, "runtime_ms": 0}
+    finally:
+        try:
+            os.unlink(tmppath)
+        except OSError:
+            pass
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Emotion Logging
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/emotions")
+async def save_emotion(body: EmotionSnapshot):
+    """Save a single emotion snapshot from the frontend webcam analysis."""
+    try:
+        es.update(
+            index="live_coding_session_index",
+            id=body.session_id,
+            script={
+                "source": "if (ctx._source.emotion_timeline == null) { ctx._source.emotion_timeline = []; } ctx._source.emotion_timeline.add(params.snap)",
+                "lang": "painless",
+                "params": {"snap": {"ts": body.timestamp, "emotion": body.emotion, "confidence": body.confidence}},
+            },
+        )
+    except Exception as e:
+        log.debug("Emotion save error: %s", e)
+    return {"ok": True}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Live Coding WebSocket — Challenger Agent
+# ──────────────────────────────────────────────────────────────────────────────
+
+CHALLENGER_AGENT_ID = os.getenv("CHALLENGER_AGENT_ID", "")
+
+# Active live coding connections keyed by session_id
+_lc_connections: dict[str, WebSocket] = {}
+
+
+@app.websocket("/ws/challenger/{session_id}")
+async def ws_challenger(websocket: WebSocket, session_id: str):
+    """
+    WebSocket relay for the Code Challenger agent.
+    Messages from client:
+      {"type": "code",   "code": "...", "language": "...", "question": "..."}
+      {"type": "ask",    "message": "..."}
+      {"type": "submit", "code": "...", "question_index": 0}
+    Messages to client:
+      {"type": "challenge", "message": "..."}
+      {"type": "ack"}
+    """
+    await websocket.accept()
+    _lc_connections[session_id] = websocket
+    log.info("Challenger WS connected  session=%s", session_id)
+
+    # Send welcome challenge
+    await websocket.send_json({
+        "type": "challenge",
+        "message": (
+            "Welcome to the Live Coding Challenge. I'll be watching your code as you work. "
+            "I won't give you answers — but I will push you to think harder. Ready? Start coding."
+        ),
+    })
+
+    async def _call_challenger(prompt: str) -> str:
+        if CHALLENGER_AGENT_ID:
+            try:
+                return await _call_agent(CHALLENGER_AGENT_ID, prompt, timeout=30.0)
+            except Exception as exc:
+                log.warning("Challenger agent error (%s); using local fallback.", exc)
+        # Local fallback is derived from the prompt context
+        code = ""
+        question = ""
+        user_msg = ""
+        if "CODE SUBMISSION" in prompt:
+            # extract code block
+            parts = prompt.split("```")
+            if len(parts) >= 2:
+                code = parts[1].strip()
+        if "CANDIDATE QUESTION:" in prompt:
+            user_msg = prompt.split("CANDIDATE QUESTION:")[-1].strip()
+        if "QUESTION:" in prompt:
+            question = prompt.split("QUESTION:")[-1].split("\n")[0].strip()
+        return _local_challenger_response(code, question, user_msg)
+
+    try:
+        while True:
+            raw = await websocket.receive_json()
+            msg_type = raw.get("type", "")
+
+            if msg_type == "code":
+                # Candidate's code changed or they explicitly requested a review
+                code     = raw.get("code", "").strip()
+                language = raw.get("language", "python")
+                question = raw.get("question", "")
+
+                if not code:
+                    continue
+
+                prompt = (
+                    f"You are a Code Challenger — an adversarial coach whose job is to push candidate thinking.\n\n"
+                    f"QUESTION: {question}\n\n"
+                    f"CODE SUBMISSION ({language}):\n```\n{code[:3000]}\n```\n\n"
+                    f"Your rules:\n"
+                    f"- NEVER provide the solution or working code\n"
+                    f"- DO challenge: time complexity, space complexity, edge cases, correctness, style\n"
+                    f"- DO ask probing questions that force deeper thinking\n"
+                    f"- Keep your response to 2–3 sharp sentences only\n"
+                    f"- Be direct and Socratic, not friendly\n"
+                    f"- If the code is correct and efficient, find a new angle to challenge\n"
+                )
+                await websocket.send_json({"type": "typing"})
+                message = await _call_challenger(prompt)
+                message = message.strip()
+
+                # Persist to challenger log
+                try:
+                    es.update(
+                        index="live_coding_session_index", id=session_id,
+                        script={
+                            "source": "if (ctx._source.challenger_log == null) { ctx._source.challenger_log = []; } ctx._source.challenger_log.add(params.entry)",
+                            "lang": "painless",
+                            "params": {"entry": {"ts": datetime.now(timezone.utc).isoformat(), "role": "challenger", "message": message}},
+                        },
+                    )
+                except Exception:
+                    pass
+
+                await websocket.send_json({"type": "challenge", "message": message})
+
+            elif msg_type == "ask":
+                # Candidate asks the challenger a direct question
+                user_message = raw.get("message", "").strip()
+                if not user_message:
+                    continue
+                question = raw.get("question", "")
+                prompt = (
+                    f"You are a Code Challenger — adversarial and Socratic, never giving away answers.\n\n"
+                    f"QUESTION CONTEXT: {question}\n\n"
+                    f"CANDIDATE QUESTION: {user_message}\n\n"
+                    f"Rules:\n"
+                    f"- Do NOT answer the question directly or give a solution\n"
+                    f"- Redirect with a probing question or hint toward a concept, not the answer\n"
+                    f"- 2 sentences max. Be challenging but fair.\n"
+                )
+                await websocket.send_json({"type": "typing"})
+                message = await _call_challenger(prompt)
+
+                # Persist candidate message too
+                try:
+                    for role, msg in [("candidate", user_message), ("challenger", message.strip())]:
+                        es.update(
+                            index="live_coding_session_index", id=session_id,
+                            script={
+                                "source": "if (ctx._source.challenger_log == null) { ctx._source.challenger_log = []; } ctx._source.challenger_log.add(params.entry)",
+                                "lang": "painless",
+                                "params": {"entry": {"ts": datetime.now(timezone.utc).isoformat(), "role": role, "message": msg}},
+                            },
+                        )
+                except Exception:
+                    pass
+
+                await websocket.send_json({"type": "challenge", "message": message.strip()})
+
+            elif msg_type == "submit":
+                # Candidate submits their final code for a question
+                code  = raw.get("code", "")
+                q_idx = raw.get("question_index", 0)
+                try:
+                    es.update(
+                        index="live_coding_session_index", id=session_id,
+                        script={
+                            "source": "if (ctx._source.code_snapshots == null) { ctx._source.code_snapshots = []; } ctx._source.code_snapshots.add(params.snap)",
+                            "lang": "painless",
+                            "params": {"snap": {"ts": datetime.now(timezone.utc).isoformat(), "question_index": q_idx, "code": code[:5000], "type": "final_submit"}},
+                        },
+                    )
+                except Exception:
+                    pass
+                await websocket.send_json({
+                    "type": "ack",
+                    "message": "Code submitted. Moving on — don't get comfortable, the next question is waiting.",
+                })
+
+            elif msg_type == "complete":
+                # Candidate finished all questions
+                try:
+                    es.update(
+                        index="live_coding_session_index", id=session_id,
+                        doc={"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()},
+                    )
+                except Exception:
+                    pass
+                await websocket.send_json({
+                    "type": "complete",
+                    "message": "Session complete. Your submissions have been recorded.",
+                })
+
+    except WebSocketDisconnect:
+        _lc_connections.pop(session_id, None)
+        log.info("Challenger WS disconnected  session=%s", session_id)
+
+# ────────────────────────────────────────────────────────────────
+# PDF / Text → structured questions parser
+# ────────────────────────────────────────────────────────────────
+class ParseQuestionsRequest(BaseModel):
+    text: str
+    room_code: str = ""
+
+def _heuristic_parse(text: str) -> list[dict]:
+    """Simple rule-based parser: split on numbered items or '---' dividers."""
+    import re
+    # Normalise line endings
+    text = text.replace("\r\n", "\n").strip()
+
+    # Try splitting on: 1. / Q1. / Question 1: / ### 1
+    block_pattern = re.compile(
+        r"(?:^|\n)\s*(?:Q(?:uestion)?\s*|#+ *)?(?P<num>\d+)[\.\):][ \t]*",
+        re.MULTILINE | re.IGNORECASE,
+    )
+    splits = [m.start() for m in block_pattern.finditer(text)]
+
+    # If fewer than 2 numbered blocks, fall back to '---' or double-newline splits
+    if len(splits) < 2:
+        blocks = [b.strip() for b in re.split(r"(?:-{3,}|={3,}|\n{2,})", text) if b.strip()]
+    else:
+        blocks = []
+        for i, start in enumerate(splits):
+            end = splits[i + 1] if i + 1 < len(splits) else len(text)
+            chunk = text[start:end].strip()
+            # Strip leading number
+            chunk = re.sub(r"^[^\n]*?[\d]+[\.\):][ \t]*", "", chunk, count=1).strip()
+            if chunk:
+                blocks.append(chunk)
+
+    questions = []
+    for block in blocks:
+        lines = block.strip().splitlines()
+        if not lines:
+            continue
+        title = lines[0].strip()[:120]
+        body  = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+        # Difficulty heuristic
+        diff_match = re.search(r"\b(easy|medium|hard)\b", block, re.IGNORECASE)
+        difficulty  = diff_match.group(1).lower() if diff_match else "medium"
+        # Tags heuristic
+        tags = []
+        for kw in ["array", "string", "hash", "tree", "graph", "dp", "dynamic programming",
+                   "binary search", "sliding window", "stack", "queue", "linked list",
+                   "recursion", "math", "sorting", "two pointers"]:
+            if kw.lower() in block.lower():
+                tags.append(kw.replace(" ", "-"))
+        # Constraints / Examples
+        constraints = ""
+        ex_in = ex_out = ""
+        cm = re.search(r"(?:Constraint[s]?:?)([\s\S]+?)(?:Example|Input|Output|$)", block, re.IGNORECASE)
+        if cm:
+            constraints = cm.group(1).strip()[:400]
+        em = re.search(r"Input:?\s*(.+?)\nOutput:?\s*(.+?)(?:\n|$)", block, re.IGNORECASE)
+        if em:
+            ex_in, ex_out = em.group(1).strip(), em.group(2).strip()
+        questions.append({
+            "title": title,
+            "description": body or title,
+            "difficulty": difficulty,
+            "tags": tags[:5],
+            "constraints": constraints,
+            "examples": [{"input": ex_in, "output": ex_out}] if ex_in or ex_out else [],
+            "starter_code_python": "def solution():\n    pass\n",
+            "starter_code_js": "function solution() {\n  \n}\n",
+        })
+    return questions
+
+
+@app.post("/parse-questions-text")
+async def parse_questions_text(body: ParseQuestionsRequest):
+    """Parse raw text (from PDF or paste) into structured coding questions."""
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="No text provided.")
+
+    # Fast heuristic parse runs immediately
+    questions = _heuristic_parse(text)
+
+    # Optional: try AI enhancement with a short timeout (non-blocking feel)
+    if CHALLENGER_AGENT_ID and questions:
+        try:
+            prompt = (
+                "You are a coding question extractor. The user pasted text from a PDF. "
+                "Extract every distinct coding problem and return ONLY a valid JSON array — no markdown fences. "
+                "Each element: title, description, difficulty (easy|medium|hard), tags (array, max 5), "
+                "constraints (string), examples (array of {input,output}, max 2), "
+                "starter_code_python, starter_code_js. Use sensible defaults for unknown fields.\n\n"
+                f"TEXT:\n{text[:4000]}"
+            )
+            raw_ai = await asyncio.wait_for(_call_agent(CHALLENGER_AGENT_ID, prompt), timeout=12.0)
+            raw_ai = raw_ai.strip()
+            if raw_ai.startswith("```"):
+                raw_ai = re.sub(r"^```[a-z]*\n?", "", raw_ai)
+                raw_ai = re.sub(r"```$", "", raw_ai).strip()
+            parsed = json.loads(raw_ai)
+            if isinstance(parsed, list) and parsed:
+                return {"questions": parsed, "source": "ai"}
+        except Exception as exc:
+            log.debug("AI question parsing skipped (%s); using heuristic result.", exc)
+
+    if not questions:
+        raise HTTPException(status_code=422, detail="Could not extract any questions from the provided text.")
+    return {"questions": questions, "source": "heuristic"}

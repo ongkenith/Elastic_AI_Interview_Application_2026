@@ -180,8 +180,60 @@ INDICES: dict[str, dict] = {
                 "benchmarked_at":   {"type": "date"},
             }
         }
+    },    # ── Live coding — question bank ───────────────────────────────────────────
+    "coding_questions_index": {
+        "mappings": {
+            "properties": {
+                "question_id":          {"type": "keyword"},
+                "room_code":            {"type": "keyword"},
+                "title":                {"type": "text"},
+                "description":          {"type": "text"},
+                "difficulty":           {"type": "keyword"},   # easy|medium|hard
+                "tags":                 {"type": "keyword"},
+                "examples":             {"type": "object",  "enabled": True},
+                "constraints":          {"type": "text"},
+                "starter_code_python":  {"type": "text"},
+                "starter_code_js":      {"type": "text"},
+                "created_at":           {"type": "date"},
+            }
+        }
     },
-}
+    # ── Live coding — candidate sessions ─────────────────────────────────────
+    "live_coding_session_index": {
+        "mappings": {
+            "properties": {
+                "session_id":       {"type": "keyword"},
+                "room_code":        {"type": "keyword"},
+                "candidate_id":     {"type": "keyword"},
+                "candidate_name":   {"type": "text"},
+                "candidate_email":  {"type": "keyword"},
+                "question_ids":     {"type": "keyword"},
+                "status":           {"type": "keyword"},   # active|completed
+                "language":         {"type": "keyword"},
+                "code_snapshots":   {"type": "object",  "enabled": True},
+                "emotion_timeline": {"type": "object",  "enabled": True},
+                "challenger_log":   {"type": "object",  "enabled": True},
+                "started_at":       {"type": "date"},
+                "completed_at":     {"type": "date"},
+            }
+        }
+    },
+    # ── Live coding rooms ─────────────────────────────────────────────────────
+    "live_coding_room_index": {
+        "mappings": {
+            "properties": {
+                "room_code":             {"type": "keyword"},
+                "room_id":               {"type": "keyword"},
+                "title":                 {"type": "text"},
+                "description":           {"type": "text"},
+                "num_questions":         {"type": "integer"},
+                "time_limit_minutes":    {"type": "integer"},
+                "interviewer_id":        {"type": "keyword"},
+                "active":                {"type": "boolean"},
+                "created_at":            {"type": "date"},
+            }
+        }
+    },}
 
 
 def create_indices(recreate: bool = False) -> None:

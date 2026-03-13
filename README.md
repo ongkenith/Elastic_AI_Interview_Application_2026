@@ -7,14 +7,268 @@ Recruiters create a room, share a code, and the AI agent conducts, scores, and r
 
 ---
 
-## Architecture
+## What You Need Before Starting
+
+Install these tools if you don't have them already:
+
+| Tool | Version | Download |
+|------|---------|----------|
+| Python | 3.10+ | https://www.python.org/downloads/ |
+| Node.js | 18+ | https://nodejs.org/ |
+| Docker Desktop | latest | https://www.docker.com/products/docker-desktop/ (only needed for local Elasticsearch) |
+
+You also need an **Elasticsearch instance** — either:
+- **Option A (recommended):** Elastic Cloud — sign up free at https://cloud.elastic.co — no Docker required
+- **Option B:** Run Elasticsearch locally with Docker (requires Docker Desktop to be running)
+
+---
+
+## Running the App
+
+There are two paths depending on how you run Elasticsearch. **Pick one.**
+
+---
+
+### Option A — Elastic Cloud (no Docker needed)
+
+> Use this if you have an Elastic Cloud account or want the easiest setup.
+
+**Step 1 — Clone and go into the project folder**
+
+```bash
+git clone <repo-url>
+cd ai_interviewer
+```
+
+**Step 2 — Set up your environment file**
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in your Elastic Cloud details:
+
+```env
+ELASTICSEARCH_URL=https://<your-deployment>.elastic-cloud.com:443
+ELASTICSEARCH_USER=elastic
+ELASTICSEARCH_PASSWORD=<your-password>
+
+# After creating agents in Kibana (see "Elastic Agents Setup" below):
+ELASTIC_AGENT_URL=https://<your-deployment>.elastic-cloud.com
+ELASTIC_API_KEY=<your-api-key>
+SUPERVISOR_AGENT_ID=<your-supervisor-agent-id>
+```
+
+> **Where to find these values:** Go to your Elastic Cloud console → your deployment → "Manage" → "Copy endpoint" for the URL, and "Reset password" for the password.
+
+**Step 3 — Set up Python**
+
+```bash
+python -m venv venv
+
+# Mac / Linux:
+source venv/bin/activate
+
+# Windows:
+venv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+**Step 4 — Create indices and seed data**
+
+> Make sure your venv is still active (you should see `(venv)` in your terminal prompt).
+
+```bash
+python scripts/create_indices.py     # creates all Elasticsearch indices
+python scripts/seed_data.py          # seeds historical benchmark data
+```
+
+**Step 5 — Start the backend** (keep this terminal open)
+
+```bash
+uvicorn main:app --reload --port 8001
+```
+
+You should see: `Application startup complete.`  
+API docs available at: **http://localhost:8001/docs**
+
+**Step 6 — Start the frontend** (open a new terminal)
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+App is live at: **http://localhost:3000** 🎉
+
+---
+
+### Option B — Local Docker (Elasticsearch runs in a container)
+
+> Use this if you prefer to run everything locally without a cloud account.  
+> Requires **Docker Desktop** to be open and running first.
+
+**Step 1 — Clone and go into the project folder**
+
+```bash
+git clone <repo-url>
+cd ai_interviewer
+```
+
+**Step 2 — Set up your environment file**
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and update the Elasticsearch values to point to localhost:
+
+```env
+ELASTICSEARCH_URL=http://localhost:9200
+ELASTICSEARCH_USER=elastic
+ELASTICSEARCH_PASSWORD=yourpassword   # must match ELASTIC_PASSWORD in docker-compose.yml
+
+# After creating agents in Kibana (see "Elastic Agents Setup" below):
+ELASTIC_AGENT_URL=http://localhost:5601
+ELASTIC_API_KEY=<your-api-key>
+SUPERVISOR_AGENT_ID=<your-supervisor-agent-id>
+```
+
+**Step 3 — Start Elasticsearch and Kibana**
+
+```bash
+docker-compose up elasticsearch kibana -d
+```
+
+Wait about 30 seconds, then verify Elasticsearch is healthy:
+
+```bash
+curl -u elastic:yourpassword http://localhost:9200/_cluster/health
+```
+
+You should see `"status":"green"` or `"status":"yellow"` in the response.  
+Kibana is available at: **http://localhost:5601**
+
+**Step 4 — Set up Python**
+
+```bash
+python -m venv venv
+
+# Mac / Linux:
+source venv/bin/activate
+
+# Windows:
+venv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+**Step 5 — Create indices and seed data**
+
+```bash
+python scripts/create_indices.py
+python scripts/seed_data.py
+```
+
+**Step 6 — Start the backend** (keep this terminal open)
+
+```bash
+uvicorn main:app --reload --port 8001
+```
+
+You should see: `Application startup complete.`  
+API docs available at: **http://localhost:8001/docs**
+
+**Step 7 — Start the frontend** (open a new terminal)
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+App is live at: **http://localhost:3000** 🎉
+
+---
+
+## App Pages
+
+| URL | Description |
+|-----|-------------|
+| http://localhost:3000/ | Landing page — choose Recruiter or Candidate |
+| http://localhost:3000/recruiter | Create interview rooms |
+| http://localhost:3000/results | Results dashboard with score charts |
+| http://localhost:3000/candidate | Candidate interview portal |
+
+---
+
+## Elastic Agents Setup
+
+The AI interview flow relies on 6 agents built in **Kibana → Search → AI Search → Agent Builder**.  
+Their system prompts are in [`agents/prompts.yaml`](agents/prompts.yaml).
+
+Create the agents in this order:
+
+| # | Agent Name | What It Does |
+|---|-----------|--------------|
+| 1 | Interview Interaction Agent | Conducts the multi-stage Q&A interview |
+| 2 | Skill Extraction Agent | Parses transcript and extracts skills |
+| 3 | Scoring Agent | Scores 4 dimensions: technical, communication, problem-solving, culture |
+| 4 | Reflection Agent | Audits scores for bias, flags MEDIUM/HIGH risk |
+| 5 | Benchmarking Agent | Compares candidate vs. historical top hires using kNN |
+| 6 | Supervisor Agent | Orchestrates all 5 agents above |
+
+After creating the **Supervisor Agent**, copy its ID and API key into your `.env`:
+
+```env
+ELASTIC_AGENT_URL=https://your-cloud.elastic.co
+ELASTIC_API_KEY=your_api_key
+SUPERVISOR_AGENT_ID=your_supervisor_agent_id
+```
+
+Then restart the backend (`Ctrl+C` then `uvicorn main:app --reload --port 8001`).
+
+---
+
+## Troubleshooting
+
+**`ModuleNotFoundError` when running Python scripts**  
+→ Your virtual environment is not active. Run `source venv/bin/activate` (Mac/Linux) or `venv\Scripts\activate` (Windows) first.
+
+**`Connection refused` on port 9200**  
+→ Elasticsearch isn't running. Start it with `docker-compose up elasticsearch -d` (Option B) or check your cloud URL (Option A).
+
+**`curl` to `/health` returns `"elasticsearch":"red"`**  
+→ Elasticsearch is starting up. Wait 30 seconds and try again.
+
+**Frontend shows a blank page or 502 error**  
+→ The backend isn't running. Make sure `uvicorn main:app --reload --port 8001` is running in a separate terminal.
+
+**`npm install` fails**  
+→ Make sure you're inside the `frontend/` folder: `cd frontend && npm install`.
+
+---
+
+## Resetting Data
+
+```bash
+python scripts/create_indices.py --recreate
+```
+
+> ⚠️ This **deletes all data** in every index. Only use this during development.
+
+---
+
+## Architecture Overview
 
 ```
 Browser (port 3000)
-    │   REST /api/*  →  proxy
+    │   REST /api/*   →  proxy
     │   WebSocket /ws/*  →  proxy
     ▼
-Node.js Frontend Server  (frontend/server.js)
+Node.js Frontend  (frontend/server.js, port 3000)
     │
     ▼ proxied
 FastAPI Backend  (main.py, port 8001)
@@ -26,8 +280,68 @@ FastAPI Backend  (main.py, port 8001)
     │       ├── Reflection Agent     ──► bias_alerts_index
     │       └── Benchmarking Agent   ──► historical_top_hires (kNN)
     │
-    └── Elasticsearch  (indices below)
+    └── Elasticsearch
 ```
+
+---
+
+## Interview Pipeline Stages
+
+| Stage | What Happens |
+|-------|-------------|
+| `GREETING` | Welcome candidate, confirm role |
+| `INTERACTION` | 6–8 adaptive questions via Interaction Agent |
+| `SKILL_EXTRACTION` | Parse transcript → extract skills |
+| `SCORING` | Score 4 dimensions, compute weighted total |
+| `REFLECTION` | Audit score for bias; flag if MEDIUM or HIGH risk |
+| `BENCHMARKING` | kNN vs. historical top hires → percentile rank |
+| `COMPLETE` | Final report stored; recruiter can view results |
+
+---
+
+## Results Dashboard Features
+
+- **Score chart** — bar chart of each candidate's score
+- **Fullscreen view** — click the ⤢ button (press Escape to close)
+- **Click a bar** — opens the candidate detail modal
+- **Sort & filter** — by score, name, or recommendation (Hire / Neutral / Pass / Pending)
+- **Session detail** — evaluation scores, transcript, recording, and CV links per candidate
+
+---
+
+## Key API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `POST` | `/rooms` | Create interview room |
+| `GET` | `/rooms/{code}` | Get room by code |
+| `GET` | `/rooms/{code}/candidates` | All candidates + evaluations |
+| `GET` | `/rooms/{code}/results` | Full results for dashboard |
+| `DELETE` | `/rooms/{code}` | Delete a room |
+| `GET` | `/interviewer/{id}/rooms` | All rooms for a recruiter |
+| `POST` | `/extract-skills` | Auto-extract skills from JD |
+| `POST` | `/register` | Candidate joins a room |
+| `GET` | `/candidates/{id}/details` | Full candidate detail + sessions |
+| `POST` | `/evaluate/{session_id}` | Trigger / re-run evaluation |
+| `GET` | `/recordings/{session_id}` | Interview recording |
+| `GET` | `/cv/{session_id}` | Candidate CV |
+| `WS` | `/ws/interview/{session_id}/{job_id}/{candidate_id}` | Live interview WebSocket |
+
+---
+
+## Elasticsearch Indices
+
+| Index | Purpose |
+|-------|---------|
+| `job_requirements_index` | Job rooms + extracted required skills |
+| `candidate_profile_index` | Candidate profiles + resume text |
+| `interview_session_index` | Session state + stage tracking |
+| `transcript_index` | Full conversation history |
+| `candidate_skill_index` | AI-extracted candidate skills |
+| `evaluation_index` | Scores + recommendation |
+| `bias_alerts_index` | Bias risk flags |
+| `historical_top_hires` | Benchmark data for kNN comparison |
 
 ---
 
@@ -42,13 +356,13 @@ ai_interviewer/
 ├── .env.example                # Environment variable template
 │
 ├── frontend/
-│   ├── server.js               # Node.js Express server + API proxy (port 3000)
+│   ├── server.js               # Node.js Express server + proxy (port 3000)
 │   ├── package.json
 │   └── public/
-│       ├── index.html          # Landing page with animated horse mascot
-│       ├── recruiter.html      # Create interview rooms + manage rooms
-│       ├── candidate.html      # Candidate interview portal (WebSocket chat)
-│       └── results.html        # Results dashboard with interactive score chart
+│       ├── index.html          # Landing page
+│       ├── recruiter.html      # Create + manage interview rooms
+│       ├── candidate.html      # Candidate interview portal (WebSocket)
+│       └── results.html        # Results dashboard with score chart
 │
 ├── agents/
 │   └── prompts.yaml            # System prompts for all Elastic agents
@@ -64,186 +378,6 @@ ai_interviewer/
 ├── config/
 │   └── kibana_setup.md         # Kibana dashboard setup guide
 │
-├── static/                     # Legacy static files (served at /static)
 ├── recordings/                 # Interview recordings (auto-created)
 └── cv/                         # Uploaded CVs (auto-created)
 ```
-
----
-
-## Prerequisites
-
-| Tool            | Version   |
-|-----------------|-----------|
-| Python          | 3.10+     |
-| Node.js         | 18+       |
-| Docker Compose  | latest    |
-| Elasticsearch   | 8.13+     |
-
----
-
-## Quick Start
-
-### 1. Configure environment
-
-```bash
-cd ai_interviewer
-cp .env.example .env
-# Fill in ELASTICSEARCH_URL, ELASTICSEARCH_PASSWORD, ELASTIC_AGENT_URL, ELASTIC_API_KEY
-```
-
-### 2. Start Elasticsearch + Kibana
-
-```bash
-docker-compose up elasticsearch kibana -d
-```
-
-Wait ~30 s, then check health:
-
-```bash
-curl -u elastic:yourpassword http://localhost:9200/_cluster/health
-```
-
-Kibana: **http://localhost:5601**
-
-### 3. Set up Python + create indices
-
-```bash
-python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-python scripts/create_indices.py     # create all indices
-python scripts/seed_data.py          # seed benchmark data
-```
-
-### 4. Start the backend
-
-```bash
-uvicorn main:app --reload --port 8001
-```
-
-API docs: **http://localhost:8001/docs**
-
-### 5. Start the frontend
-
-```bash
-cd frontend
-npm install
-npm start
-```
-
-App: **http://localhost:3000**
-
----
-
-## Pages
-
-| URL                          | Description                              |
-|------------------------------|------------------------------------------|
-| `http://localhost:3000/`     | Landing page — choose recruiter or candidate |
-| `/recruiter`                 | Create interview rooms                   |
-| `/results`                   | Results dashboard with score chart       |
-| `/candidate`                 | Candidate interview portal               |
-
----
-
-## Results Dashboard Features
-
-- **Score chart** — bar chart showing each candidate's score (Y) vs. name (X)
-- **Expand chart** — click the ⤢ button (or press Escape to close) for a fullscreen view
-- **Click to view candidate** — click any bar or name label to open the candidate detail modal
-- **Sort & filter** — sort by score or name; filter by recommendation (Hire / Neutral / Pass / Pending)
-- **Session detail** — evaluation scores, transcript, recording, and CV links per candidate
-
----
-
-## Elasticsearch Indices
-
-| Index                      | Purpose                              |
-|----------------------------|--------------------------------------|
-| `job_requirements_index`   | Job rooms + extracted required skills |
-| `candidate_profile_index`  | Candidate profiles + resume text     |
-| `interview_session_index`  | Session state + stage tracking       |
-| `transcript_index`         | Full conversation history            |
-| `candidate_skill_index`    | AI-extracted candidate skills        |
-| `evaluation_index`         | Scores + recommendation              |
-| `bias_alerts_index`        | Bias risk flags                      |
-| `historical_top_hires`     | Benchmark data for kNN comparison    |
-
----
-
-## Key API Endpoints
-
-| Method | Path                                    | Description                        |
-|--------|-----------------------------------------|------------------------------------|
-| `GET`  | `/health`                               | Health check                       |
-| `POST` | `/rooms`                                | Create interview room              |
-| `GET`  | `/rooms/{code}`                         | Get room by code                   |
-| `GET`  | `/rooms/{code}/candidates`              | All candidates + evaluations       |
-| `GET`  | `/rooms/{code}/results`                 | Full results for dashboard         |
-| `DELETE` | `/rooms/{code}`                       | Delete a room                      |
-| `GET`  | `/interviewer/{id}/rooms`               | All rooms for a recruiter          |
-| `POST` | `/extract-skills`                       | Auto-extract skills from JD        |
-| `POST` | `/register`                             | Candidate joins a room             |
-| `GET`  | `/candidates/{id}/details`              | Full candidate detail + sessions   |
-| `POST` | `/evaluate/{session_id}`               | Trigger/re-run evaluation          |
-| `GET`  | `/recordings/{session_id}`              | Interview recording                |
-| `GET`  | `/cv/{session_id}`                      | Candidate CV                       |
-| `WS`   | `/ws/interview/{session_id}/{job_id}/{candidate_id}` | Live interview WebSocket |
-
----
-
-## Elastic Agents Setup
-
-In **Kibana → Search → AI Search → Agent Builder**, create 6 agents (see `agents/prompts.yaml` for prompts):
-
-1. **Interview Interaction Agent** — conducts multi-stage Q&A
-2. **Skill Extraction Agent** — parses transcript → skills
-3. **Scoring Agent** — scores 4 dimensions (technical, communication, problem-solving, culture)
-4. **Reflection Agent** — audits for bias, flags MEDIUM/HIGH risk
-5. **Benchmarking Agent** — kNN similarity vs. historical top hires
-6. **Supervisor Agent** — orchestrates all the above
-
-After creating the Supervisor Agent, copy its ID into `.env`:
-
-```env
-ELASTIC_AGENT_URL=https://your-cloud.elastic.co
-ELASTIC_API_KEY=your_api_key
-SUPERVISOR_AGENT_ID=your_supervisor_agent_id
-```
-
----
-
-## Docker (Full Stack)
-
-```bash
-docker-compose up --build
-```
-
-This starts Elasticsearch, Kibana, and the FastAPI backend together.  
-Run the Node.js frontend separately: `cd frontend && npm start`
-
----
-
-## Reset Indices
-
-```bash
-python scripts/create_indices.py --recreate
-```
-
-⚠️ This deletes all data. Use only in development.
-
----
-
-## Pipeline Stages
-
-| Stage           | What Happens                                           |
-|-----------------|--------------------------------------------------------|
-| `GREETING`      | Welcome candidate, confirm role                        |
-| `INTERACTION`   | 6–8 adaptive questions via Interaction Agent           |
-| `SKILL_EXTRACTION` | Parse transcript → extract skills                 |
-| `SCORING`       | Score 4 dimensions, compute weighted total             |
-| `REFLECTION`    | Audit score for bias; flag if MEDIUM or HIGH risk      |
-| `BENCHMARKING`  | kNN vs. historical top hires → percentile rank         |
-| `COMPLETE`      | Final report stored; recruiter can view results        |
