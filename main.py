@@ -1394,22 +1394,12 @@ async def interview_ws(
                 else str(nested)
             )
 
-    # Send opening greeting — try agent first, fall back to local instantly
-    try:
-        reply_text = await call_agent("Start the interview with a professional greeting.")
-        try:
-            parsed = json.loads(reply_text) if reply_text.strip().startswith("{") else None
-        except Exception:
-            parsed = None
-        greeting_payload = parsed or {"role": "assistant", "message": reply_text, "stage": "GREETING"}
-        greeting_text = greeting_payload.get("message", reply_text)
-    except Exception as exc:
-        log.warning("Agent greeting error (using local)  session=%s  %s", session_id, exc)
-        greeting_text = (
-            "Welcome! I'm your AI interviewer today. "
-            "Could you start by introducing yourself and giving me a quick overview of your background?"
-        )
-        greeting_payload = {"role": "assistant", "message": greeting_text, "stage": "GREETING"}
+    # Send the first question immediately instead of waiting on the agent.
+    greeting_text = (
+        f"Welcome. You're interviewing for {_job_title or 'this role'} today. "
+        "Could you start by introducing yourself and giving me a quick overview of your background?"
+    )
+    greeting_payload = {"role": "assistant", "message": greeting_text, "stage": "GREETING"}
 
     await websocket.send_json(greeting_payload)
     history.append({"role": "assistant", "content": greeting_text})

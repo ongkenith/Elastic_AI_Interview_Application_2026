@@ -843,7 +843,7 @@
     <!-- messages injected here -->
   </div>
 
-  <div class="speech-bar">
+  <div class="speech-bar" id="speech-bar">
     <div class="live-transcript" id="live-transcript">Waiting for question…</div>
     <div class="mic-row">
       <button class="mic-btn" id="mic-btn" onclick="toggleMic()" disabled title="Click to speak">🎙️</button>
@@ -989,8 +989,10 @@ function applyInputMode() {
   const micRow   = document.querySelector('.mic-row');
   const micHint  = document.getElementById('mic-hint');
   const chatArea = document.getElementById('chat-input-area');
+  const speechBar = document.getElementById('speech-bar');
   if (micRow)  micRow.style.display  = isMic ? '' : 'none';
   if (micHint) micHint.style.display = isMic ? '' : 'none';
+  if (speechBar) speechBar.style.display = isMic ? '' : 'none';
   if (chatArea) chatArea.classList.toggle('active', !isMic);
   _usedMicCount = 0;
 }
@@ -1008,7 +1010,10 @@ function autoResizeChatInput(el) {
 function setChatInputEnabled(on) {
   const inp = document.getElementById('chat-input');
   const btn = document.getElementById('chat-send-btn');
-  if (inp) { inp.disabled = !on; if (on) setTimeout(() => inp.focus(), 50); }
+  if (inp) {
+    inp.disabled = !on;
+    if (on) inp.focus();
+  }
   if (btn) btn.disabled = !on;
 }
 
@@ -1413,6 +1418,11 @@ if (window.speechSynthesis) {
 }
 
 function speakAIResponse(text) {
+  if (_state.inputMode === 'chat') {
+    setRobotSpeaking(false);
+    setChatInputEnabled(true);
+    return;
+  }
   if (!text || !window.speechSynthesis) { setMicEnabled(true); return; }
   window.speechSynthesis.cancel();
 
