@@ -18,6 +18,7 @@ import re
 import string
 import subprocess
 import uuid
+import wave
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -72,6 +73,7 @@ PIPER_MODEL = Path(
         str(Path(__file__).parent / "models" / "piper" / "en_US-hfc_female-medium.onnx"),
     )
 )
+PIPER_LEAD_IN_MS = int(os.getenv("PIPER_LEAD_IN_MS", "400"))
 
 app.mount("/static",   StaticFiles(directory=str(STATIC_DIR)),   name="static")
 app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")
@@ -201,7 +203,7 @@ def _synthesize_with_piper(text: str) -> Path:
         raise ValueError("Text is required")
 
     cache_key = hashlib.sha256(
-        f"{PIPER_MODEL}|{normalized}".encode("utf-8")
+        f"{PIPER_MODEL}|{PIPER_LEAD_IN_MS}|{normalized}".encode("utf-8")
     ).hexdigest()
     output_path = TTS_CACHE_DIR / f"{cache_key}.wav"
     if output_path.exists() and output_path.stat().st_size > 44:
@@ -231,7 +233,30 @@ def _synthesize_with_piper(text: str) -> Path:
         raise RuntimeError(stderr or f"Piper exited with code {proc.returncode}")
     if not output_path.exists() or output_path.stat().st_size <= 44:
         raise RuntimeError("Piper did not generate a valid WAV file")
+    _prepend_wav_silence(output_path, PIPER_LEAD_IN_MS)
     return output_path
+
+
+def _prepend_wav_silence(path: Path, silence_ms: int) -> None:
+    """Add a short lead-in so browsers don't clip the first phoneme on playback."""
+    if silence_ms <= 0 or not path.exists():
+        return
+
+    with wave.open(str(path), "rb") as wav_in:
+        params = wav_in.getparams()
+        frames = wav_in.readframes(wav_in.getnframes())
+
+    frame_rate = params.framerate
+    sample_width = params.sampwidth
+    channels = params.nchannels
+    silence_frames = int(frame_rate * silence_ms / 1000)
+    if silence_frames <= 0:
+        return
+
+    silence = b"\x00" * silence_frames * sample_width * channels
+    with wave.open(str(path), "wb") as wav_out:
+        wav_out.setparams(params)
+        wav_out.writeframes(silence + frames)
 
 
 class TTSRequest(BaseModel):
@@ -245,26 +270,80 @@ def _is_finalized_session(session: dict, evaluation: Optional[dict] = None) -> b
     return bool(evaluation) and (status == "completed" or stage == "COMPLETE")
 
 
-def _get_finalized_candidate_count(job_id: str) -> int:
-    """Room summary count should match the results page count."""
+def _get_evaluations_by_session_ids(session_ids: list[str]) -> dict[str, dict]:
+    if not session_ids:
+        return {}
+    docs = es.mget(index="evaluation_index", docs=[{"_id": sid} for sid in session_ids])["docs"]
+    return {
+        doc["_id"]: doc["_source"]
+        for doc in docs
+        if doc.get("found") and doc.get("_source")
+    }
+
+
+def _get_finalized_sessions_for_job(job_id: str) -> list[dict]:
+    """Fetch all finalized sessions for a room in one search + one batched evaluation lookup."""
     sessions_res = es.search(
         index="interview_session_index",
         size=1000,
         query={"term": {"job_id": job_id}},
         sort=[{"started_at": {"order": "desc"}}],
     )
-    candidate_ids: set[str] = set()
-    for hit in sessions_res["hits"]["hits"]:
-        session = hit["_source"]
-        try:
-            evaluation = es.get(index="evaluation_index", id=session["session_id"])["_source"]
-        except NotFoundError:
-            evaluation = None
+    sessions = [hit["_source"] for hit in sessions_res["hits"]["hits"]]
+    evaluations = _get_evaluations_by_session_ids([s["session_id"] for s in sessions])
+    finalized = []
+    for session in sessions:
+        evaluation = evaluations.get(session["session_id"])
         if _is_finalized_session(session, evaluation):
-            cand_id = session.get("candidate_id")
-            if cand_id:
-                candidate_ids.add(cand_id)
-    return len(candidate_ids)
+            finalized.append({"session": session, "evaluation": evaluation})
+    return finalized
+
+
+def _get_candidate_profiles(candidate_ids: list[str]) -> dict[str, dict]:
+    if not candidate_ids:
+        return {}
+    docs = es.mget(index="candidate_profile_index", docs=[{"_id": cid} for cid in candidate_ids])["docs"]
+    profiles = {}
+    for doc in docs:
+        cid = doc.get("_id")
+        if doc.get("found") and doc.get("_source"):
+            profiles[cid] = doc["_source"]
+        else:
+            profiles[cid] = {"candidate_id": cid, "name": "Unknown", "email": ""}
+    return profiles
+
+
+def _get_finalized_candidate_count(job_id: str) -> int:
+    """Room summary count should match the results page count."""
+    finalized = _get_finalized_sessions_for_job(job_id)
+    return len({item["session"].get("candidate_id") for item in finalized if item["session"].get("candidate_id")})
+
+
+def _get_finalized_candidate_counts_by_job_ids(job_ids: list[str]) -> dict[str, int]:
+    """Batch finalized candidate counts for room list cards."""
+    if not job_ids:
+        return {}
+
+    sessions_res = es.search(
+        index="interview_session_index",
+        size=5000,
+        query={"terms": {"job_id": job_ids}},
+        sort=[{"started_at": {"order": "desc"}}],
+    )
+    sessions = [hit["_source"] for hit in sessions_res["hits"]["hits"]]
+    evaluations = _get_evaluations_by_session_ids([s["session_id"] for s in sessions])
+
+    counts: dict[str, set[str]] = {job_id: set() for job_id in job_ids}
+    for session in sessions:
+        evaluation = evaluations.get(session["session_id"])
+        if not _is_finalized_session(session, evaluation):
+            continue
+        job_id = session.get("job_id")
+        candidate_id = session.get("candidate_id")
+        if job_id and candidate_id:
+            counts.setdefault(job_id, set()).add(candidate_id)
+
+    return {job_id: len(candidate_ids) for job_id, candidate_ids in counts.items()}
 
 
 @app.get("/api/tts/health")
@@ -776,10 +855,14 @@ def get_interviewer_rooms(interviewer_id: str):
         sort=[{"created_at": {"order": "desc"}}],
     )
     
+    room_hits = result["hits"]["hits"]
+    job_ids = [hit["_source"]["job_id"] for hit in room_hits]
+    candidate_counts = _get_finalized_candidate_counts_by_job_ids(job_ids)
+
     rooms = []
-    for hit in result["hits"]["hits"]:
+    for hit in room_hits:
         room_data = hit["_source"]
-        candidate_count = _get_finalized_candidate_count(room_data["job_id"])
+        candidate_count = candidate_counts.get(room_data["job_id"], 0)
         
         rooms.append({
             "job_id": room_data["job_id"],
@@ -811,46 +894,20 @@ def get_room_results(room_code: str):
     job = job_res["hits"]["hits"][0]["_source"]
     job_id = job["job_id"]
     
-    # Get all candidates for this room 
-    candidates_res = es.search(
-        index="candidate_profile_index",
-        size=100,
-        query={"term": {"job_id": job_id}},
-        sort=[{"created_at": {"order": "desc"}}],
-    )
-    
+    finalized = _get_finalized_sessions_for_job(job_id)
+    candidate_ids = [cid for cid in {item["session"].get("candidate_id") for item in finalized} if cid]
+    profiles = _get_candidate_profiles(candidate_ids)
     candidates_with_results = []
-    for hit in candidates_res["hits"]["hits"]:
-        candidate = hit["_source"]
-        candidate_id = candidate["candidate_id"]
-        
-        # Get interview sessions for this candidate
-        sessions_res = es.search(
-            index="interview_session_index",
-            size=10,
-            query={"bool": {"must": [
-                {"term": {"candidate_id": candidate_id}},
-                {"term": {"job_id": job_id}}
-            ]}},
-            sort=[{"started_at": {"order": "desc"}}],
-        )
-        
+    for candidate_id in candidate_ids:
+        candidate = profiles.get(candidate_id, {"candidate_id": candidate_id, "name": "Unknown", "email": ""})
         sessions_with_eval = []
-        for session_hit in sessions_res["hits"]["hits"]:
-            session = session_hit["_source"]
-            
-            # Get evaluation for this session
-            try:
-                eval_res = es.get(index="evaluation_index", id=session["session_id"])
-                evaluation = eval_res["_source"]
-            except NotFoundError:
-                evaluation = None
-            if not _is_finalized_session(session, evaluation):
+        for item in finalized:
+            session = item["session"]
+            if session.get("candidate_id") != candidate_id:
                 continue
-                
             sessions_with_eval.append({
                 "session": session,
-                "evaluation": evaluation
+                "evaluation": item["evaluation"]
             })
         if not sessions_with_eval:
             continue
@@ -884,18 +941,13 @@ def get_candidate_details(candidate_id: str):
         query={"term": {"candidate_id": candidate_id}},
         sort=[{"started_at": {"order": "desc"}}],
     )
+    sessions = [hit["_source"] for hit in sessions_res["hits"]["hits"]]
+    evaluations = _get_evaluations_by_session_ids([s["session_id"] for s in sessions])
     
     detailed_sessions = []
-    for hit in sessions_res["hits"]["hits"]:
-        session = hit["_source"]
+    for session in sessions:
         session_id = session["session_id"]
-        
-        # Get evaluation
-        try:
-            eval_res = es.get(index="evaluation_index", id=session_id)
-            evaluation = eval_res["_source"]
-        except NotFoundError:
-            evaluation = None
+        evaluation = evaluations.get(session_id)
         if not _is_finalized_session(session, evaluation):
             continue
         

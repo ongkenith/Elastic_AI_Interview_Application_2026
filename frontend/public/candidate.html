@@ -1455,13 +1455,16 @@ async function speakWithPiper(text, finishResponse) {
   const url = URL.createObjectURL(blob);
   const audio = new Audio(url);
   audio.dataset.url = url;
+  audio.preload = 'auto';
   _ttsAudio = audio;
 
-  await audio.play();
-  setRobotSpeaking(true);
-
   await new Promise((resolve, reject) => {
+    const cleanup = () => {
+      audio.onended = null;
+      audio.onerror = null;
+    };
     audio.onended = () => {
+      cleanup();
       setRobotSpeaking(false);
       URL.revokeObjectURL(url);
       if (_ttsAudio === audio) _ttsAudio = null;
@@ -1469,11 +1472,21 @@ async function speakWithPiper(text, finishResponse) {
       resolve();
     };
     audio.onerror = () => {
+      cleanup();
       setRobotSpeaking(false);
       URL.revokeObjectURL(url);
       if (_ttsAudio === audio) _ttsAudio = null;
       reject(new Error('Piper audio playback failed'));
     };
+    audio.play().then(() => {
+      setRobotSpeaking(true);
+    }).catch((err) => {
+      cleanup();
+      setRobotSpeaking(false);
+      URL.revokeObjectURL(url);
+      if (_ttsAudio === audio) _ttsAudio = null;
+      reject(err);
+    });
   });
 }
 
