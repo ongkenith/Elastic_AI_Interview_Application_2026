@@ -19,3 +19,6 @@ esdata/
 .DS_Store
 cv/
 recordings/
+tools/piper/
+models/piper/
+models/kokoro/

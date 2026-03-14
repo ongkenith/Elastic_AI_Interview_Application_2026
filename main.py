@@ -9,12 +9,14 @@ Serves:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import random
 import re
 import string
+import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,6 +61,17 @@ RECORDINGS_DIR = Path(__file__).parent / "recordings"
 RECORDINGS_DIR.mkdir(exist_ok=True)
 CV_DIR = Path(__file__).parent / "cv"
 CV_DIR.mkdir(exist_ok=True)
+TTS_CACHE_DIR = RECORDINGS_DIR / "tts"
+TTS_CACHE_DIR.mkdir(exist_ok=True)
+TOOLS_DIR = Path(__file__).parent / "tools"
+PIPER_DIR = TOOLS_DIR / "piper" / "piper"
+PIPER_EXE = Path(os.getenv("PIPER_EXE", str(PIPER_DIR / "piper.exe")))
+PIPER_MODEL = Path(
+    os.getenv(
+        "PIPER_MODEL",
+        str(Path(__file__).parent / "models" / "piper" / "en_US-hfc_female-medium.onnx"),
+    )
+)
 
 app.mount("/static",   StaticFiles(directory=str(STATIC_DIR)),   name="static")
 app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")
@@ -165,6 +178,92 @@ def health_check():
         return {"status": "ok", "elasticsearch": info["status"]}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Elasticsearch unavailable: {exc}")
+
+
+def _get_piper_config_path(model_path: Path) -> Path:
+    return model_path.with_suffix(model_path.suffix + ".json")
+
+
+def _piper_available() -> tuple[bool, str]:
+    if not PIPER_EXE.exists():
+        return False, f"Piper executable not found at {PIPER_EXE}"
+    if not PIPER_MODEL.exists():
+        return False, f"Piper model not found at {PIPER_MODEL}"
+    config_path = _get_piper_config_path(PIPER_MODEL)
+    if not config_path.exists():
+        return False, f"Piper model config not found at {config_path}"
+    return True, ""
+
+
+def _synthesize_with_piper(text: str) -> Path:
+    normalized = text.strip()
+    if not normalized:
+        raise ValueError("Text is required")
+
+    cache_key = hashlib.sha256(
+        f"{PIPER_MODEL}|{normalized}".encode("utf-8")
+    ).hexdigest()
+    output_path = TTS_CACHE_DIR / f"{cache_key}.wav"
+    if output_path.exists() and output_path.stat().st_size > 44:
+        return output_path
+
+    ok, reason = _piper_available()
+    if not ok:
+        raise RuntimeError(reason)
+
+    proc = subprocess.run(
+        [
+            str(PIPER_EXE),
+            "--model",
+            str(PIPER_MODEL),
+            "--output_file",
+            str(output_path),
+        ],
+        input=normalized,
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+        timeout=45,
+        check=False,
+    )
+    if proc.returncode != 0:
+        stderr = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(stderr or f"Piper exited with code {proc.returncode}")
+    if not output_path.exists() or output_path.stat().st_size <= 44:
+        raise RuntimeError("Piper did not generate a valid WAV file")
+    return output_path
+
+
+class TTSRequest(BaseModel):
+    text: str
+
+
+@app.get("/api/tts/health")
+@app.get("/tts/health")
+def tts_health():
+    ok, reason = _piper_available()
+    return {
+        "available": ok,
+        "engine": "piper" if ok else None,
+        "executable": str(PIPER_EXE),
+        "model": str(PIPER_MODEL),
+        "detail": None if ok else reason,
+    }
+
+
+@app.post("/api/tts")
+@app.post("/tts")
+async def synthesize_tts(body: TTSRequest):
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required")
+    try:
+        audio_path = await asyncio.to_thread(_synthesize_with_piper, text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return FileResponse(str(audio_path), media_type="audio/wav")
 
 
 @app.get("/")
