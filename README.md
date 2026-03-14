@@ -85,6 +85,19 @@ If these files already exist, skip this step:
 - [`models/piper/en_US-hfc_female-medium.onnx`](models/piper/en_US-hfc_female-medium.onnx)
 - [`models/piper/en_US-hfc_female-medium.onnx.json`](models/piper/en_US-hfc_female-medium.onnx.json)
 
+On Windows PowerShell, download and extract them with:
+
+```powershell
+.\scripts\install_piper.ps1
+```
+
+On macOS / Linux, download and extract them with:
+
+```bash
+chmod +x ./scripts/install_piper.sh
+./scripts/install_piper.sh
+```
+
 Optional environment overrides:
 
 ```env
@@ -192,6 +205,19 @@ Make sure these files exist:
 - [`tools/piper/piper/piper.exe`](tools/piper/piper/piper.exe)
 - [`models/piper/en_US-hfc_female-medium.onnx`](models/piper/en_US-hfc_female-medium.onnx)
 - [`models/piper/en_US-hfc_female-medium.onnx.json`](models/piper/en_US-hfc_female-medium.onnx.json)
+
+On Windows PowerShell, download and extract them with:
+
+```powershell
+.\scripts\install_piper.ps1
+```
+
+On macOS / Linux, download and extract them with:
+
+```bash
+chmod +x ./scripts/install_piper.sh
+./scripts/install_piper.sh
+```
 
 Optional environment overrides:
 

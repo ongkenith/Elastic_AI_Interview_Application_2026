@@ -1092,9 +1092,11 @@ async function startInterview() {
   const name   = document.getElementById('cand-name').value.trim();
   const email  = document.getElementById('cand-email').value.trim();
   const resume = _resumeText;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   if (!name)   { showAlert('reg-alert', 'Please enter your full name.');  return; }
   if (!email)  { showAlert('reg-alert', 'Please enter your email address.'); return; }
+  if (!emailOk) { showAlert('reg-alert', 'Please enter a valid email address.'); return; }
   if (!resume) { showAlert('reg-alert', 'Please attach your resume (PDF or TXT) so the AI can personalise your interview.'); return; }
 
   const btn = document.getElementById('start-btn');

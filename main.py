@@ -29,7 +29,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile, WebSo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sentence_transformers import SentenceTransformer
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -392,7 +392,7 @@ class BiasFlag(BaseModel):
 class CandidateProfile(BaseModel):
     candidate_id: str
     name: str
-    email: str
+    email: EmailStr
     job_id: str
 
 
@@ -429,7 +429,7 @@ class SkillExtractionRequest(BaseModel):
 class CandidateRegister(BaseModel):
     room_code: str
     name: str
-    email: str
+    email: EmailStr
     resume_text: Optional[str] = ""
 
 
