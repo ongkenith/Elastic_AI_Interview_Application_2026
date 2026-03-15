@@ -444,7 +444,7 @@
 </div>
 
 <script>
-const API = '/api';
+const API = window.location.port === '8001' ? '' : '/api';
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
 // ─── State ────────────────────────────────────────────────────────────────────

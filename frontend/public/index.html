@@ -164,7 +164,20 @@
       margin-bottom: 32px;
       position: relative;
     }
+    .mascot-img {
+      width: 260px;
+      height: 260px;
+      object-fit: contain;
+      filter: drop-shadow(0 16px 40px rgba(120,120,120,.28));
+      animation: horseBob 2.4s ease-in-out infinite;
+      cursor: pointer;
+      user-select: none;
+    }
+    .mascot-img:hover {
+      animation: horseWiggle 0.5s ease-in-out, horseBob 2.4s ease-in-out 0.5s infinite;
+    }
     .mascot-svg {
+      display: none;
       width: 260px;
       height: 260px;
       filter: drop-shadow(0 16px 40px rgba(200,140,80,.4));
@@ -234,8 +247,14 @@
 <body>
   <div class="logo">AI <span>Interview</span> System</div>
 
-  <!-- ✨ Cute Disney Horse Mascot ✨ -->
+  <!-- Mascot -->
   <div class="mascot-wrap">
+    <img
+      class="mascot-img"
+      src="/frontend/assets/girl_mascot.svg"
+      alt="Elastic girl mascot"
+      onerror="if (this.dataset.fallbackTried !== '1') { this.dataset.fallbackTried='1'; this.src='/assets/girl_mascot.svg'; } else { this.style.display='none'; this.nextElementSibling.style.display='block'; }"
+    />
     <svg class="mascot-svg" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <!-- Coat gradient -->

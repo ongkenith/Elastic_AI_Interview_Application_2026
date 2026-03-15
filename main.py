@@ -173,6 +173,7 @@ def root():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
+@app.get("/candidate")
 @app.get("/candidate.html")
 def candidate_portal():
     """Serve the candidate webcam interview portal."""
@@ -185,6 +186,7 @@ def recruiter_portal_new():
     return FileResponse(str(FRONTEND_DIR / "recruiter.html"))
 
 
+@app.get("/results")
 @app.get("/results.html")
 def results_page():
     """Serve the interview results page."""

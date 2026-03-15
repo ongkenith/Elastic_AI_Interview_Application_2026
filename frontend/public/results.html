@@ -196,6 +196,8 @@
   </div>
 
   <script>
+    const API = window.location.port === '8001' ? '' : '/api';
+
     // State management
     let currentInterviewerId = localStorage.getItem('interviewerId') || 'default_interviewer';
     let currentRooms = [];
@@ -261,7 +263,7 @@
     async function loadMyRooms() {
       showLoading();
       try {
-        const response = await fetch(`/api/interviewer/${encodeURIComponent(currentInterviewerId)}/rooms`);
+        const response = await fetch(`${API}/interviewer/${encodeURIComponent(currentInterviewerId)}/rooms`);
         if (response.ok) {
           const data = await response.json();
           currentRooms = data.rooms || [];
@@ -357,7 +359,7 @@
       document.getElementById('modalContent').innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div><p class="mt-2">Loading results...</p></div>';
       
       try {
-        const response = await fetch(`/api/rooms/${roomCode}/results`);
+        const response = await fetch(`${API}/rooms/${roomCode}/results`);
         if (response.ok) {
           const data = await response.json();
           displayRoomResults(data);
@@ -667,12 +669,12 @@
           ${evalSection}
           ${sessionId ? `
           <div class="mt-3 flex gap-2" onclick="event.stopPropagation()">
-            <a href="/api/recordings/${sessionId}" target="_blank"
+            <a href="${API}/recordings/${sessionId}" target="_blank"
                class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 hover:text-blue-600 hover:border-blue-400 transition-colors no-underline"
                title="Watch interview recording">
               ▶ Recording
             </a>
-            <a href="/api/cv/${sessionId}" target="_blank"
+            <a href="${API}/cv/${sessionId}" target="_blank"
                class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 hover:text-blue-600 hover:border-blue-400 transition-colors no-underline"
                title="View candidate CV">
               📄 CV
@@ -689,7 +691,7 @@
       document.getElementById('candidateModalContent').innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div><p class="mt-2">Loading candidate details...</p></div>';
       
       try {
-        const response = await fetch(`/api/candidates/${candidateId}/details`);
+        const response = await fetch(`${API}/candidates/${candidateId}/details`);
         if (response.ok) {
           const data = await response.json();
           displayCandidateDetails(data);
@@ -871,14 +873,14 @@
       btn.disabled = true;
       btn.textContent = 'Running…';
       try {
-        const r = await fetch(`/api/evaluate/${sessionId}`, { method: 'POST' });
+        const r = await fetch(`${API}/evaluate/${sessionId}`, { method: 'POST' });
         if (r.ok) {
           btn.textContent = '✓ Queued';
           // Poll until done
           let attempts = 0;
           const poll = setInterval(async () => {
             attempts++;
-            const s = await fetch(`/api/evaluate/${sessionId}`);
+            const s = await fetch(`${API}/evaluate/${sessionId}`);
             const d = await s.json();
             if (d.status === 'complete' || attempts >= 20) {
               clearInterval(poll);
@@ -920,7 +922,7 @@
       }
 
       try {
-        const response = await fetch(`/api/rooms/${selectedRoom}`, {
+        const response = await fetch(`${API}/rooms/${selectedRoom}`, {
           method: 'DELETE'
         });
         

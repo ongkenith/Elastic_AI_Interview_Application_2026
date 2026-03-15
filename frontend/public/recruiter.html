@@ -555,7 +555,7 @@ Given a string of brackets, determine if it is valid..."></textarea>
 
 <script>
 // ─── Config ───────────────────────────────────────────────────────────────────
-const API = '/api';  // proxied to FastAPI
+const API = window.location.port === '8001' ? '' : '/api';  // use direct backend routes when served from FastAPI
 
 // ─── Tab navigation ───────────────────────────────────────────────────────────
 const TABS = ['create', 'created', 'results', 'livecoding'];
