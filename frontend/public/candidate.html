@@ -171,9 +171,30 @@
       background:var(--blue);color:#fff;
       border-bottom-right-radius:4px;
     }
+    .ai-bubble-row{
+      display:flex;align-items:center;gap:8px;
+    }
     .msg-time{font-size:11px;color:var(--sub);margin-top:4px;
               text-align:right;padding:0 4px}
     .me .msg-time{text-align:right}
+    .ai-message-meta{
+      display:flex;align-items:center;gap:8px;margin-top:4px;padding:0 4px;
+    }
+    .ai-speaking-indicator{
+      display:inline-flex;align-items:flex-end;gap:3px;
+      padding:4px 8px;border-radius:999px;
+      background:rgba(79,142,247,.12);border:1px solid rgba(79,142,247,.22);
+      opacity:0;transform:translateY(4px) scale(.96);
+      transition:opacity .2s,transform .2s,border-color .2s;
+      flex-shrink:0;
+    }
+    .ai-speaking-indicator.active{
+      opacity:1;transform:translateY(0) scale(1);
+      border-color:rgba(79,142,247,.4);
+    }
+    .ai-speaking-icon{
+      color:var(--blue);font-size:11px;line-height:1;margin-right:2px;
+    }
 
     /* Typing indicator */
     .typing-row{display:flex;gap:10px;align-items:center;align-self:flex-start}
@@ -344,7 +365,15 @@
     }
     .robot-label{font-size:11px;font-weight:700;color:var(--sub);
                   letter-spacing:.8px;text-transform:uppercase}
+    .robot-visual{
+      position:relative;display:flex;align-items:center;justify-content:center;
+    }
     .robot-svg{width:160px;height:190px}
+    .robot-speaking-indicator{display:none}
+    .sound-bar{
+      width:3px;border-radius:999px;background:var(--blue);
+      height:10px;opacity:.45;
+    }
 
     /* ── Horse animations ── */
     @keyframes horseBob{
@@ -402,15 +431,16 @@
     }
     .webcam-off-icon{font-size:28px}
 
-    /* Speaking bars — shown when .speaking is on #robot-face */
+    /* Speaking bars — shown when AI audio/typing is active */
     @keyframes barPulse{
       0%,100%{transform:scaleY(1);opacity:.5}
       50%{transform:scaleY(1.8);opacity:1}
     }
-    .speaking .bar-anim{transform-origin:bottom;animation:barPulse .55s ease infinite}
-    .speaking .bar-anim:nth-child(2){animation-delay:.12s}
-    .speaking .bar-anim:nth-child(3){animation-delay:.24s}
-    .speaking .bar-anim:nth-child(4){animation-delay:.08s}
+    .ai-speaking-indicator.active .sound-bar{transform-origin:bottom;animation:barPulse .55s ease infinite}
+    .ai-speaking-indicator.active .sound-bar:nth-child(2){animation-delay:.12s}
+    .ai-speaking-indicator.active .sound-bar:nth-child(3){animation-delay:.24s}
+    .ai-speaking-indicator.active .sound-bar:nth-child(4){animation-delay:.08s}
+    .ai-speaking-indicator.active .sound-bar:nth-child(5){animation-delay:.18s}
 
     /* ── Stage badge ── */
     .stage-badge{
@@ -619,15 +649,24 @@
   <div class="video-section">
     <div class="robot-panel">
       <div class="robot-label">AI Interviewer</div>
-      <!-- Girl mascot -->
-      <img 
-        id="robot-face" 
-        class="robot-svg" 
-        src="/frontend/assets/girl_mascot.svg" 
-        alt="AI Interviewer mascot"
-        style="width: 180px; height: 180px; object-fit: contain; filter: drop-shadow(0 8px 24px rgba(100,100,100,0.2));"
-        onerror="this.style.display='none';"
-      />
+      <div class="robot-visual">
+        <!-- Girl mascot -->
+        <img 
+          id="robot-face" 
+          class="robot-svg" 
+          src="/frontend/assets/girl_mascot.svg" 
+          alt="AI Interviewer mascot"
+          style="width: 180px; height: 180px; object-fit: contain; filter: drop-shadow(0 8px 24px rgba(100,100,100,0.2));"
+          onerror="if (this.dataset.fallbackTried !== '1') { this.dataset.fallbackTried='1'; this.src='/assets/girl_mascot.svg'; } else { this.style.display='none'; }"
+        />
+        <div id="robot-speaking-indicator" class="robot-speaking-indicator" aria-hidden="true">
+          <span class="robot-speaking-icon">🔊</span>
+          <span class="sound-bar"></span>
+          <span class="sound-bar"></span>
+          <span class="sound-bar"></span>
+          <span class="sound-bar"></span>
+        </div>
+      </div>
     </div>
 
     <div class="webcam-panel">
@@ -690,7 +729,7 @@
     <!-- messages injected here -->
   </div>
 
-  <div class="speech-bar">
+  <div class="speech-bar" id="speech-bar">
     <div class="live-transcript" id="live-transcript">Waiting for question…</div>
     <div class="mic-row">
       <button class="mic-btn" id="mic-btn" onclick="toggleMic()" disabled title="Click to speak">🎙️</button>
@@ -836,8 +875,10 @@ function applyInputMode() {
   const micRow   = document.querySelector('.mic-row');
   const micHint  = document.getElementById('mic-hint');
   const chatArea = document.getElementById('chat-input-area');
+  const speechBar = document.getElementById('speech-bar');
   if (micRow)  micRow.style.display  = isMic ? '' : 'none';
   if (micHint) micHint.style.display = isMic ? '' : 'none';
+  if (speechBar) speechBar.style.display = isMic ? '' : 'none';
   if (chatArea) chatArea.classList.toggle('active', !isMic);
   _usedMicCount = 0;
 }
@@ -855,7 +896,10 @@ function autoResizeChatInput(el) {
 function setChatInputEnabled(on) {
   const inp = document.getElementById('chat-input');
   const btn = document.getElementById('chat-send-btn');
-  if (inp) { inp.disabled = !on; if (on) setTimeout(() => inp.focus(), 50); }
+  if (inp) {
+    inp.disabled = !on;
+    if (on) inp.focus();
+  }
   if (btn) btn.disabled = !on;
 }
 
@@ -934,9 +978,11 @@ async function startInterview() {
   const name   = document.getElementById('cand-name').value.trim();
   const email  = document.getElementById('cand-email').value.trim();
   const resume = _resumeText;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   if (!name)   { showAlert('reg-alert', 'Please enter your full name.');  return; }
   if (!email)  { showAlert('reg-alert', 'Please enter your email address.'); return; }
+  if (!emailOk) { showAlert('reg-alert', 'Please enter a valid email address.'); return; }
   if (!resume) { showAlert('reg-alert', 'Please attach your resume (PDF or TXT) so the AI can personalise your interview.'); return; }
 
   const btn = document.getElementById('start-btn');
@@ -1088,9 +1134,12 @@ function startPresenceDetection(video) {
 // ─── Robot face speaking animation ─────────────────────────────────────
 function setRobotSpeaking(on) {
   const face = document.getElementById('robot-face');
-  if (!face) return;
-  if (on) face.classList.add('speaking');
-  else    face.classList.remove('speaking');
+  const indicator = document.querySelector('.msg-row.ai:last-child .ai-speaking-indicator');
+  if (face) {
+    if (on) face.classList.add('speaking');
+    else    face.classList.remove('speaking');
+  }
+  if (indicator) indicator.classList.toggle('active', !!on);
 }
 
 // ─── Speech Recognition & Synthesis ───────────────────────────────────────
@@ -1247,59 +1296,175 @@ function setStage(stage) {
 
 // ─── TTS voice loader ─────────────────────────────────────────────────────────
 let _ttsVoice = null;
+let _ttsAudio = null;
 function loadTTSVoice() {
   const voices = window.speechSynthesis.getVoices();
-  _ttsVoice = voices.find(v => v.lang === 'en-US' && v.localService)
-           || voices.find(v => v.lang.startsWith('en-US'))
-           || voices.find(v => v.lang.startsWith('en'))
-           || null;
+  const preferredAmericanWomen = [
+    'Samantha', 'Ava', 'Allison', 'Susan', 'Victoria', 'Karen',
+    'Zira', 'Jenny', 'Aria', 'Michelle', 'Salli', 'Joanna'
+  ];
+
+  const isAmericanEnglish = (voice) => (voice.lang || '').toLowerCase().startsWith('en-us');
+  const scoreVoice = (voice) => {
+    const name = (voice.name || '').toLowerCase();
+    const matchIndex = preferredAmericanWomen.findIndex((candidate) => name.includes(candidate.toLowerCase()));
+    if (matchIndex !== -1 && isAmericanEnglish(voice)) return 100 - matchIndex;
+    if (isAmericanEnglish(voice) && voice.localService) return 60;
+    if (isAmericanEnglish(voice)) return 40;
+    if ((voice.lang || '').toLowerCase().startsWith('en')) return 20;
+    return 0;
+  };
+
+  _ttsVoice = voices
+    .map((voice) => ({ voice, score: scoreVoice(voice) }))
+    .sort((a, b) => b.score - a.score)
+    .find((entry) => entry.score > 0)?.voice || null;
 }
 if (window.speechSynthesis) {
   loadTTSVoice();
   window.speechSynthesis.onvoiceschanged = loadTTSVoice;
 }
 
-function speakAIResponse(text) {
-  if (!text || !window.speechSynthesis) { setMicEnabled(true); return; }
-  window.speechSynthesis.cancel();
+async function speakWithPiper(text, finishResponse) {
+  const res = await fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error('Piper TTS unavailable');
 
-  const doSpeak = () => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    if (_ttsVoice) utterance.voice = _ttsVoice;
-    utterance.rate   = 1.0;
-    utterance.pitch  = 1.0;
-    utterance.volume = 1.0;
+  const blob = await res.blob();
+  if (!blob.size) throw new Error('Empty Piper audio response');
+
+  if (_ttsAudio) {
+    _ttsAudio.pause();
+    if (_ttsAudio.dataset.url) URL.revokeObjectURL(_ttsAudio.dataset.url);
+  }
+
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  audio.dataset.url = url;
+  audio.preload = 'auto';
+  _ttsAudio = audio;
+
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      finishResponse();
+    };
+    const cleanup = () => {
+      audio.onended = null;
+      audio.onerror = null;
+    };
+    audio.onended = () => {
+      cleanup();
+      setRobotSpeaking(false);
+      URL.revokeObjectURL(url);
+      if (_ttsAudio === audio) _ttsAudio = null;
+      settle();
+      resolve();
+    };
+    audio.onerror = () => {
+      cleanup();
+      setRobotSpeaking(false);
+      URL.revokeObjectURL(url);
+      if (_ttsAudio === audio) _ttsAudio = null;
+      settle();
+      reject(new Error('Piper audio playback failed'));
+    };
+    audio.play().then(() => {
+      setRobotSpeaking(true);
+    }).catch((err) => {
+      cleanup();
+      setRobotSpeaking(false);
+      URL.revokeObjectURL(url);
+      if (_ttsAudio === audio) _ttsAudio = null;
+      settle();
+      reject(err);
+    });
+  });
+}
+
+function speakAIResponse(text) {
+  const finishResponse = () => {
+    setRobotSpeaking(false);
+    if (_state.inputMode === 'chat') setChatInputEnabled(true);
+    else setMicEnabled(true);
+  };
+
+  if (!text) { finishResponse(); return Promise.resolve(); }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+
+  return speakWithPiper(text, finishResponse).catch(() => {
+    if (_ttsAudio) {
+      _ttsAudio.pause();
+      if (_ttsAudio.dataset.url) URL.revokeObjectURL(_ttsAudio.dataset.url);
+      _ttsAudio = null;
+    }
+    return speakWithBrowserTTS(text, finishResponse);
+  });
+}
+
+function speakWithBrowserTTS(text, finishResponse) {
+  if (!text || !window.speechSynthesis) { finishResponse(); return Promise.resolve(); }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      finishResponse();
+      resolve();
+    };
+
+    const doSpeak = () => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      if (_ttsVoice) utterance.voice = _ttsVoice;
+      utterance.rate   = 1.0;
+      utterance.pitch  = 1.0;
+      utterance.volume = 1.0;
 
     // Fallback: open mic after estimated speaking time even if onend never fires
     const words       = text.trim().split(/\s+/).length;
     const estimatedMs = Math.max(4000, words * 380);   // ~158 wpm estimate
     const fallback    = setTimeout(() => {
-      setRobotSpeaking(false);
-      setMicEnabled(true);
+      settle();
     }, estimatedMs);
 
     utterance.onstart = () => setRobotSpeaking(true);
-    utterance.onend   = () => { clearTimeout(fallback); setRobotSpeaking(false); setMicEnabled(true); };
-    utterance.onerror = () => { clearTimeout(fallback); setRobotSpeaking(false); setMicEnabled(true); };
+    utterance.onend   = () => { clearTimeout(fallback); settle(); };
+    utterance.onerror = () => { clearTimeout(fallback); settle(); };
     window.speechSynthesis.speak(utterance);
 
     // Chrome bug: speech queued but never starts — detect after 1.5 s and bail
     setTimeout(() => {
       if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
         clearTimeout(fallback);
-        setRobotSpeaking(false);
-        setMicEnabled(true);
+        settle();
       }
     }, 1500);
   };
 
   // Voices might not be loaded on the very first call
-  if (window.speechSynthesis.getVoices().length === 0) {
-    window.speechSynthesis.onvoiceschanged = () => { loadTTSVoice(); doSpeak(); };
-    setTimeout(() => { if (!_micEnabled) { setRobotSpeaking(false); setMicEnabled(true); } }, 2500);
-  } else {
-    doSpeak();
-  }
+    if (window.speechSynthesis.getVoices().length === 0) {
+      const previousHandler = window.speechSynthesis.onvoiceschanged;
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.onvoiceschanged = previousHandler || null;
+        loadTTSVoice();
+        doSpeak();
+      };
+    setTimeout(() => {
+      if ((_state.inputMode === 'chat' && document.getElementById('chat-input')?.disabled) ||
+          (_state.inputMode === 'mic' && !_micEnabled)) {
+        settle();
+      }
+    }, 2500);
+    } else {
+      doSpeak();
+    }
+  });
 }
 
 // ─── Screen 3: WebSocket interview ─────────────────────────────────────────
@@ -1334,20 +1499,22 @@ function connectWS() {
     if (data.stage) setStage(data.stage);
 
     const text = data.message || '';
+    let speechPromise = Promise.resolve();
     if (text) {
       appendMsg('ai', text);
-      speakAIResponse(text);
+      speechPromise = speakAIResponse(text);
     }
 
     // Check if interview is done
     if (data.stage === 'COMPLETE') {
       setWsStatus('connected');
       setMicEnabled(false);
-      window.speechSynthesis && window.speechSynthesis.cancel();
-      stopAndSaveRecording().then(() => {
-        setTimeout(() => {
-          document.getElementById('complete-overlay').style.display = 'flex';
-        }, 800);
+      speechPromise.finally(() => {
+        stopAndSaveRecording().then(() => {
+          setTimeout(() => {
+            document.getElementById('complete-overlay').style.display = 'flex';
+          }, 800);
+        });
       });
       if (_presenceInterval) { clearInterval(_presenceInterval); _presenceInterval = null; }
       return;
@@ -1379,8 +1546,21 @@ function appendMsg(role, text) {
   row.innerHTML = `
     <div class="msg-avatar">${isMe ? _myInitials : '🤖'}</div>
     <div>
-      <div class="bubble">${escHtml(text)}</div>
-      <div class="msg-time">${now}</div>
+      ${isMe
+        ? `<div class="bubble">${escHtml(text)}</div>`
+        : `<div class="ai-bubble-row">
+            <div class="bubble">${escHtml(text)}</div>
+            <div class="ai-speaking-indicator" aria-hidden="true">
+              <span class="ai-speaking-icon">🔊</span>
+              <span class="sound-bar"></span>
+              <span class="sound-bar"></span>
+              <span class="sound-bar"></span>
+              <span class="sound-bar"></span>
+            </div>
+          </div>`}
+      ${isMe
+        ? `<div class="msg-time">${now}</div>`
+        : `<div class="ai-message-meta"><div class="msg-time">${now}</div></div>`}
     </div>`;
   body.appendChild(row);
   body.scrollTop = body.scrollHeight;

@@ -842,6 +842,27 @@ function scoreColor(s) {
   return 'var(--red)';
 }
 
+function getEvalScore(evaluation, primaryKey, fallbackKey) {
+  if (!evaluation || typeof evaluation !== 'object') return 0;
+
+  const normalize = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const direct = normalize(evaluation[primaryKey]);
+  if (direct != null) return direct;
+
+  if (fallbackKey) {
+    const fallback = normalize(evaluation[fallbackKey]);
+    if (fallback != null) return fallback;
+  }
+
+  const details = Array.isArray(evaluation.score_details) ? evaluation.score_details : [];
+  const detail = details.find((item) => item && item.dimension === fallbackKey);
+  return normalize(detail?.score) ?? 0;
+}
+
 function initials(name = '') {
   return name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase() || '?';
 }
@@ -876,11 +897,11 @@ function renderCandCard({ session, candidate, evaluation }, idx) {
       ${evaluation ? `
       <div class="eval-grid">
         ${[
-          ['Technical',      evaluation.technical_score,       'var(--blue)'],
-          ['Communication',  evaluation.communication_score,   'var(--purple)'],
-          ['Problem Solving',evaluation.problem_solving_score, 'var(--yellow)'],
-          ['Cultural Fit',   evaluation.cultural_fit_score,    'var(--green)'],
-          ['Total Score',    evaluation.overall_score??evaluation.total_score??0, scoreColor(evaluation.overall_score??evaluation.total_score??0)],
+          ['Technical',      getEvalScore(evaluation, 'technical_score', 'technical'),             'var(--blue)'],
+          ['Communication',  getEvalScore(evaluation, 'communication_score', 'communication'),     'var(--purple)'],
+          ['Problem Solving',getEvalScore(evaluation, 'problem_solving_score', 'problem_solving'), 'var(--yellow)'],
+          ['Cultural Fit',   getEvalScore(evaluation, 'cultural_fit_score', 'cultural_fit'),       'var(--green)'],
+          ['Total Score',    getEvalScore(evaluation, 'overall_score', 'total_score'), scoreColor(getEvalScore(evaluation, 'overall_score', 'total_score'))],
         ].map(([lbl, val, col]) => `
           <div class="eval-item">
             <label>${lbl}</label>

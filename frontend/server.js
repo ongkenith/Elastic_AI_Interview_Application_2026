@@ -1,10 +1,51 @@
 const express = require("express");
+const fs = require("fs");
 const path = require("path");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+
+  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const equalsIndex = trimmed.indexOf("=");
+    if (equalsIndex === -1) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, equalsIndex).trim();
+    if (!key || process.env[key] !== undefined) {
+      continue;
+    }
+
+    let value = trimmed.slice(equalsIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
+
 const app = express();
-const PORT = 3000;
-const BACKEND = "http://localhost:8001";
+loadEnvFile(path.resolve(__dirname, ".env"));
+loadEnvFile(path.resolve(__dirname, "..", ".env"));
+
+const PORT = Number(process.env.FRONTEND_PORT || 3000);
+const BACKEND = (
+  process.env.NGROK_BACKEND_URL ||
+  process.env.BACKEND_URL ||
+  "http://localhost:8001"
+).replace(/\/$/, "");
 
 // ─── Proxy: REST API calls (/api/* → backend) ────────────────────────────────
 app.use(

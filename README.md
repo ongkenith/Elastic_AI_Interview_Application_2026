@@ -37,7 +37,7 @@ There are two paths depending on how you run Elasticsearch. **Pick one.**
 
 ```bash
 git clone <repo-url>
-cd ai_interviewer
+cd Elastic_AI_Interview_Application
 ```
 
 **Step 2 — Set up your environment file**
@@ -75,6 +75,36 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+**Step 3.5 â€” Set up offline interviewer voice (Piper)**
+
+> `requirements.txt` installs the Python packages only. The current interviewer voice also requires the Piper runtime and model files on disk.
+
+If these files already exist, skip this step:
+
+- [`tools/piper/piper/piper.exe`](tools/piper/piper/piper.exe)
+- [`models/piper/en_US-hfc_female-medium.onnx`](models/piper/en_US-hfc_female-medium.onnx)
+- [`models/piper/en_US-hfc_female-medium.onnx.json`](models/piper/en_US-hfc_female-medium.onnx.json)
+
+On Windows PowerShell, download and extract them with:
+
+```powershell
+.\scripts\install_piper.ps1
+```
+
+On macOS / Linux, download and extract them with:
+
+```bash
+chmod +x ./scripts/install_piper.sh
+./scripts/install_piper.sh
+```
+
+Optional environment overrides:
+
+```env
+PIPER_EXE=tools/piper/piper/piper.exe
+PIPER_MODEL=models/piper/en_US-hfc_female-medium.onnx
+```
+
 **Step 4 — Create indices and seed data**
 
 > Make sure your venv is still active (you should see `(venv)` in your terminal prompt).
@@ -92,6 +122,7 @@ uvicorn main:app --reload --port 8001
 
 You should see: `Application startup complete.`  
 API docs available at: **http://localhost:8001/docs**
+Piper health check available at: **http://localhost:8001/tts/health**
 
 **Step 6 — Start the frontend** (open a new terminal)
 
@@ -114,7 +145,7 @@ App is live at: **http://localhost:3000** 🎉
 
 ```bash
 git clone <repo-url>
-cd ai_interviewer
+cd Elastic_AI_Interview_Application
 ```
 
 **Step 2 — Set up your environment file**
@@ -165,6 +196,36 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+**Step 4.5 â€” Set up offline interviewer voice (Piper)**
+
+> `requirements.txt` does not install the Piper executable or voice model.
+
+Make sure these files exist:
+
+- [`tools/piper/piper/piper.exe`](tools/piper/piper/piper.exe)
+- [`models/piper/en_US-hfc_female-medium.onnx`](models/piper/en_US-hfc_female-medium.onnx)
+- [`models/piper/en_US-hfc_female-medium.onnx.json`](models/piper/en_US-hfc_female-medium.onnx.json)
+
+On Windows PowerShell, download and extract them with:
+
+```powershell
+.\scripts\install_piper.ps1
+```
+
+On macOS / Linux, download and extract them with:
+
+```bash
+chmod +x ./scripts/install_piper.sh
+./scripts/install_piper.sh
+```
+
+Optional environment overrides:
+
+```env
+PIPER_EXE=tools/piper/piper/piper.exe
+PIPER_MODEL=models/piper/en_US-hfc_female-medium.onnx
+```
+
 **Step 5 — Create indices and seed data**
 
 ```bash
@@ -180,6 +241,7 @@ uvicorn main:app --reload --port 8001
 
 You should see: `Application startup complete.`  
 API docs available at: **http://localhost:8001/docs**
+Piper health check available at: **http://localhost:8001/tts/health**
 
 **Step 7 — Start the frontend** (open a new terminal)
 
@@ -314,6 +376,8 @@ FastAPI Backend  (main.py, port 8001)
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Health check |
+| `GET` | `/tts/health` | Offline Piper TTS health check |
+| `POST` | `/tts` | Generate interviewer speech audio |
 | `POST` | `/rooms` | Create interview room |
 | `GET` | `/rooms/{code}` | Get room by code |
 | `GET` | `/rooms/{code}/candidates` | All candidates + evaluations |
@@ -321,7 +385,7 @@ FastAPI Backend  (main.py, port 8001)
 | `DELETE` | `/rooms/{code}` | Delete a room |
 | `GET` | `/interviewer/{id}/rooms` | All rooms for a recruiter |
 | `POST` | `/extract-skills` | Auto-extract skills from JD |
-| `POST` | `/register` | Candidate joins a room |
+| `POST` | `/candidates/register` | Candidate joins a room |
 | `GET` | `/candidates/{id}/details` | Full candidate detail + sessions |
 | `POST` | `/evaluate/{session_id}` | Trigger / re-run evaluation |
 | `GET` | `/recordings/{session_id}` | Interview recording |

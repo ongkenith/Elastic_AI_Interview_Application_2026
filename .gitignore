@@ -1,5 +1,7 @@
 .env
 venv/
+.venv
+.vscode*
 node_modules/
 __pycache__/
 *.pyc
@@ -17,6 +19,9 @@ esdata/
 .DS_Store
 cv/
 recordings/
+tools/piper/
+models/piper/
+models/kokoro/
 *.pdf
 tools/
 models/

@@ -206,6 +206,27 @@
     let _chartExpanded = false;       // expand state
     let _chartCandidateIds = [];      // parallel array mapping bar index → candidate_id
 
+    function getEvalScore(evaluation, primaryKey, fallbackKey) {
+      if (!evaluation || typeof evaluation !== 'object') return 0;
+
+      const normalize = (value) => {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : null;
+      };
+
+      const direct = normalize(evaluation[primaryKey]);
+      if (direct != null) return direct;
+
+      if (fallbackKey) {
+        const fallback = normalize(evaluation[fallbackKey]);
+        if (fallback != null) return fallback;
+      }
+
+      const details = Array.isArray(evaluation.score_details) ? evaluation.score_details : [];
+      const detail = details.find((item) => item && item.dimension === fallbackKey);
+      return normalize(detail?.score) ?? 0;
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
       updateInterviewerIdDisplay();
@@ -766,11 +787,11 @@
         </div>`;
 
       if (evaluation) {
-        const overall  = evaluation.overall_score ?? evaluation.total_score ?? 0;
-        const tech     = evaluation.technical_score ?? 0;
-        const comm     = evaluation.communication_score ?? 0;
-        const ps       = evaluation.problem_solving_score ?? 0;
-        const cf       = evaluation.cultural_fit_score ?? 0;
+        const overall  = getEvalScore(evaluation, 'overall_score', 'total_score');
+        const tech     = getEvalScore(evaluation, 'technical_score', 'technical');
+        const comm     = getEvalScore(evaluation, 'communication_score', 'communication');
+        const ps       = getEvalScore(evaluation, 'problem_solving_score', 'problem_solving');
+        const cf       = getEvalScore(evaluation, 'cultural_fit_score', 'cultural_fit');
         const rec      = evaluation.recommendation || '';
         const src      = evaluation.source ? `<span class="text-xs text-gray-400">(${evaluation.source})</span>` : '';
 

@@ -413,17 +413,38 @@
 
   sendBtn.addEventListener("click", send);
 
+  function getEvalScore(evaluation, primaryKey, fallbackKey) {
+    if (!evaluation || typeof evaluation !== "object") return 0;
+
+    const normalize = (value) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : null;
+    };
+
+    const direct = normalize(evaluation[primaryKey]);
+    if (direct != null) return direct;
+
+    if (fallbackKey) {
+      const fallback = normalize(evaluation[fallbackKey]);
+      if (fallback != null) return fallback;
+    }
+
+    const details = Array.isArray(evaluation.score_details) ? evaluation.score_details : [];
+    const detail = details.find((item) => item && item.dimension === fallbackKey);
+    return normalize(detail?.score) ?? 0;
+  }
+
   // ── Report modal ───────────────────────────────────────────────────────────
   function renderReport(report) {
     const box = document.getElementById("report-content");
     const ev  = report.evaluation || {};
 
     const scores = [
-      { label: "Technical Skills",  val: ev.technical_score },
-      { label: "Communication",     val: ev.communication_score },
-      { label: "Problem Solving",   val: ev.problem_solving_score },
-      { label: "Cultural Fit",      val: ev.cultural_fit_score },
-      { label: "Total Score",       val: ev.total_score },
+      { label: "Technical Skills",  val: getEvalScore(ev, "technical_score", "technical") },
+      { label: "Communication",     val: getEvalScore(ev, "communication_score", "communication") },
+      { label: "Problem Solving",   val: getEvalScore(ev, "problem_solving_score", "problem_solving") },
+      { label: "Cultural Fit",      val: getEvalScore(ev, "cultural_fit_score", "cultural_fit") },
+      { label: "Total Score",       val: getEvalScore(ev, "total_score", "overall_score") },
     ];
 
     box.innerHTML = `

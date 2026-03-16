@@ -9,13 +9,16 @@ Serves:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import random
 import re
 import string
+import subprocess
 import uuid
+import wave
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -27,7 +30,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile, WebSo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sentence_transformers import SentenceTransformer
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -43,10 +46,33 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Allow the Node.js frontend (port 3000) + any localhost origin
+def _get_cors_origins() -> list[str]:
+    origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8001",
+        "http://127.0.0.1:8001",
+    ]
+    extra_origins = [
+        os.getenv("FRONTEND_URL", "").strip(),
+        os.getenv("NGROK_FRONTEND_URL", "").strip(),
+    ]
+    extra_origins.extend(
+        origin.strip()
+        for origin in os.getenv("ADDITIONAL_CORS_ORIGINS", "").split(",")
+        if origin.strip()
+    )
+    for origin in extra_origins:
+        if origin and origin not in origins:
+            origins.append(origin.rstrip("/"))
+    return origins
+
+
+# Allow localhost by default and optionally a configured frontend/ngrok origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8001"],
+    allow_origins=_get_cors_origins(),
+    allow_origin_regex=r"^https://[a-z0-9-]+\.(ngrok-free\.app|ngrok\.app|ngrok-free\.dev|ngrok\.dev)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,6 +85,18 @@ RECORDINGS_DIR = Path(__file__).parent / "recordings"
 RECORDINGS_DIR.mkdir(exist_ok=True)
 CV_DIR = Path(__file__).parent / "cv"
 CV_DIR.mkdir(exist_ok=True)
+TTS_CACHE_DIR = RECORDINGS_DIR / "tts"
+TTS_CACHE_DIR.mkdir(exist_ok=True)
+TOOLS_DIR = Path(__file__).parent / "tools"
+PIPER_DIR = TOOLS_DIR / "piper" / "piper"
+PIPER_EXE = Path(os.getenv("PIPER_EXE", str(PIPER_DIR / "piper.exe")))
+PIPER_MODEL = Path(
+    os.getenv(
+        "PIPER_MODEL",
+        str(Path(__file__).parent / "models" / "piper" / "en_US-hfc_female-medium.onnx"),
+    )
+)
+PIPER_LEAD_IN_MS = int(os.getenv("PIPER_LEAD_IN_MS", "400"))
 
 app.mount("/static",   StaticFiles(directory=str(STATIC_DIR)),   name="static")
 app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")
@@ -167,6 +205,197 @@ def health_check():
         raise HTTPException(status_code=503, detail=f"Elasticsearch unavailable: {exc}")
 
 
+def _get_piper_config_path(model_path: Path) -> Path:
+    return model_path.with_suffix(model_path.suffix + ".json")
+
+
+def _piper_available() -> tuple[bool, str]:
+    if not PIPER_EXE.exists():
+        return False, f"Piper executable not found at {PIPER_EXE}"
+    if not PIPER_MODEL.exists():
+        return False, f"Piper model not found at {PIPER_MODEL}"
+    config_path = _get_piper_config_path(PIPER_MODEL)
+    if not config_path.exists():
+        return False, f"Piper model config not found at {config_path}"
+    return True, ""
+
+
+def _synthesize_with_piper(text: str) -> Path:
+    normalized = text.strip()
+    if not normalized:
+        raise ValueError("Text is required")
+
+    cache_key = hashlib.sha256(
+        f"{PIPER_MODEL}|{PIPER_LEAD_IN_MS}|{normalized}".encode("utf-8")
+    ).hexdigest()
+    output_path = TTS_CACHE_DIR / f"{cache_key}.wav"
+    if output_path.exists() and output_path.stat().st_size > 44:
+        return output_path
+
+    ok, reason = _piper_available()
+    if not ok:
+        raise RuntimeError(reason)
+
+    proc = subprocess.run(
+        [
+            str(PIPER_EXE),
+            "--model",
+            str(PIPER_MODEL),
+            "--output_file",
+            str(output_path),
+        ],
+        input=normalized,
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+        timeout=45,
+        check=False,
+    )
+    if proc.returncode != 0:
+        stderr = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(stderr or f"Piper exited with code {proc.returncode}")
+    if not output_path.exists() or output_path.stat().st_size <= 44:
+        raise RuntimeError("Piper did not generate a valid WAV file")
+    _prepend_wav_silence(output_path, PIPER_LEAD_IN_MS)
+    return output_path
+
+
+def _prepend_wav_silence(path: Path, silence_ms: int) -> None:
+    """Add a short lead-in so browsers don't clip the first phoneme on playback."""
+    if silence_ms <= 0 or not path.exists():
+        return
+
+    with wave.open(str(path), "rb") as wav_in:
+        params = wav_in.getparams()
+        frames = wav_in.readframes(wav_in.getnframes())
+
+    frame_rate = params.framerate
+    sample_width = params.sampwidth
+    channels = params.nchannels
+    silence_frames = int(frame_rate * silence_ms / 1000)
+    if silence_frames <= 0:
+        return
+
+    silence = b"\x00" * silence_frames * sample_width * channels
+    with wave.open(str(path), "wb") as wav_out:
+        wav_out.setparams(params)
+        wav_out.writeframes(silence + frames)
+
+
+class TTSRequest(BaseModel):
+    text: str
+
+
+def _is_finalized_session(session: dict, evaluation: Optional[dict] = None) -> bool:
+    """Only fully completed interviews should appear in recruiter/results views."""
+    status = (session.get("status") or "").lower()
+    return status == "completed"
+
+
+def _get_evaluations_by_session_ids(session_ids: list[str]) -> dict[str, dict]:
+    if not session_ids:
+        return {}
+    docs = es.mget(index="evaluation_index", docs=[{"_id": sid} for sid in session_ids])["docs"]
+    return {
+        doc["_id"]: doc["_source"]
+        for doc in docs
+        if doc.get("found") and doc.get("_source")
+    }
+
+
+def _get_finalized_sessions_for_job(job_id: str) -> list[dict]:
+    """Fetch all finalized sessions for a room in one search + one batched evaluation lookup."""
+    sessions_res = es.search(
+        index="interview_session_index",
+        size=1000,
+        query={"term": {"job_id": job_id}},
+        sort=[{"started_at": {"order": "desc"}}],
+    )
+    sessions = [hit["_source"] for hit in sessions_res["hits"]["hits"]]
+    evaluations = _get_evaluations_by_session_ids([s["session_id"] for s in sessions])
+    finalized = []
+    for session in sessions:
+        evaluation = evaluations.get(session["session_id"])
+        if _is_finalized_session(session, evaluation):
+            finalized.append({"session": session, "evaluation": evaluation})
+    return finalized
+
+
+def _get_candidate_profiles(candidate_ids: list[str]) -> dict[str, dict]:
+    if not candidate_ids:
+        return {}
+    docs = es.mget(index="candidate_profile_index", docs=[{"_id": cid} for cid in candidate_ids])["docs"]
+    profiles = {}
+    for doc in docs:
+        cid = doc.get("_id")
+        if doc.get("found") and doc.get("_source"):
+            profiles[cid] = doc["_source"]
+        else:
+            profiles[cid] = {"candidate_id": cid, "name": "Unknown", "email": ""}
+    return profiles
+
+
+def _get_finalized_candidate_count(job_id: str) -> int:
+    """Room summary count should match the results page count."""
+    finalized = _get_finalized_sessions_for_job(job_id)
+    return len({item["session"].get("candidate_id") for item in finalized if item["session"].get("candidate_id")})
+
+
+def _get_finalized_candidate_counts_by_job_ids(job_ids: list[str]) -> dict[str, int]:
+    """Batch finalized candidate counts for room list cards."""
+    if not job_ids:
+        return {}
+
+    sessions_res = es.search(
+        index="interview_session_index",
+        size=5000,
+        query={"terms": {"job_id": job_ids}},
+        sort=[{"started_at": {"order": "desc"}}],
+    )
+    sessions = [hit["_source"] for hit in sessions_res["hits"]["hits"]]
+    evaluations = _get_evaluations_by_session_ids([s["session_id"] for s in sessions])
+
+    counts: dict[str, set[str]] = {job_id: set() for job_id in job_ids}
+    for session in sessions:
+        evaluation = evaluations.get(session["session_id"])
+        if not _is_finalized_session(session, evaluation):
+            continue
+        job_id = session.get("job_id")
+        candidate_id = session.get("candidate_id")
+        if job_id and candidate_id:
+            counts.setdefault(job_id, set()).add(candidate_id)
+
+    return {job_id: len(candidate_ids) for job_id, candidate_ids in counts.items()}
+
+
+@app.get("/api/tts/health")
+@app.get("/tts/health")
+def tts_health():
+    ok, reason = _piper_available()
+    return {
+        "available": ok,
+        "engine": "piper" if ok else None,
+        "executable": str(PIPER_EXE),
+        "model": str(PIPER_MODEL),
+        "detail": None if ok else reason,
+    }
+
+
+@app.post("/api/tts")
+@app.post("/tts")
+async def synthesize_tts(body: TTSRequest):
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required")
+    try:
+        audio_path = await asyncio.to_thread(_synthesize_with_piper, text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return FileResponse(str(audio_path), media_type="audio/wav")
+
+
 @app.get("/")
 def root():
     """Serve the portal picker (choose candidate or recruiter)."""
@@ -266,7 +495,7 @@ class BiasFlag(BaseModel):
 class CandidateProfile(BaseModel):
     candidate_id: str
     name: str
-    email: str
+    email: EmailStr
     job_id: str
 
 
@@ -303,7 +532,7 @@ class SkillExtractionRequest(BaseModel):
 class CandidateRegister(BaseModel):
     room_code: str
     name: str
-    email: str
+    email: EmailStr
     resume_text: Optional[str] = ""
 
 
@@ -625,6 +854,8 @@ def get_room_candidates(room_code: str):
             evaluation = es.get(index="evaluation_index", id=session["session_id"])["_source"]
         except NotFoundError:
             evaluation = None
+        if not _is_finalized_session(session, evaluation):
+            continue
         results.append({
             "session":    session,
             "candidate":  profile,
@@ -645,20 +876,24 @@ def get_interviewer_rooms(interviewer_id: str):
         index="job_requirements_index",
         size=100,
         query={"term": {"interviewer_id": interviewer_id}},
-        sort=[{"created_at": {"order": "desc"}}],
     )
-    
+
+    room_hits = sorted(
+        result["hits"]["hits"],
+        key=lambda hit: (
+            hit.get("_source", {}).get("created_at")
+            or hit.get("_source", {}).get("updated_at")
+            or ""
+        ),
+        reverse=True,
+    )
+    job_ids = [hit["_source"]["job_id"] for hit in room_hits]
+    candidate_counts = _get_finalized_candidate_counts_by_job_ids(job_ids)
+
     rooms = []
-    for hit in result["hits"]["hits"]:
+    for hit in room_hits:
         room_data = hit["_source"]
-        
-        # Get candidate count for this room
-        candidate_count_res = es.search(
-            index="candidate_profile_index",
-            size=0,
-            query={"term": {"job_id": room_data["job_id"]}},
-        )
-        candidate_count = candidate_count_res["hits"]["total"]["value"]
+        candidate_count = candidate_counts.get(room_data["job_id"], 0)
         
         rooms.append({
             "job_id": room_data["job_id"],
@@ -690,46 +925,23 @@ def get_room_results(room_code: str):
     job = job_res["hits"]["hits"][0]["_source"]
     job_id = job["job_id"]
     
-    # Get all candidates for this room 
-    candidates_res = es.search(
-        index="candidate_profile_index",
-        size=100,
-        query={"term": {"job_id": job_id}},
-        sort=[{"created_at": {"order": "desc"}}],
-    )
-    
+    finalized = _get_finalized_sessions_for_job(job_id)
+    candidate_ids = [cid for cid in {item["session"].get("candidate_id") for item in finalized} if cid]
+    profiles = _get_candidate_profiles(candidate_ids)
     candidates_with_results = []
-    for hit in candidates_res["hits"]["hits"]:
-        candidate = hit["_source"]
-        candidate_id = candidate["candidate_id"]
-        
-        # Get interview sessions for this candidate
-        sessions_res = es.search(
-            index="interview_session_index",
-            size=10,
-            query={"bool": {"must": [
-                {"term": {"candidate_id": candidate_id}},
-                {"term": {"job_id": job_id}}
-            ]}},
-            sort=[{"started_at": {"order": "desc"}}],
-        )
-        
+    for candidate_id in candidate_ids:
+        candidate = profiles.get(candidate_id, {"candidate_id": candidate_id, "name": "Unknown", "email": ""})
         sessions_with_eval = []
-        for session_hit in sessions_res["hits"]["hits"]:
-            session = session_hit["_source"]
-            
-            # Get evaluation for this session
-            try:
-                eval_res = es.get(index="evaluation_index", id=session["session_id"])
-                evaluation = eval_res["_source"]
-            except NotFoundError:
-                evaluation = None
-                
+        for item in finalized:
+            session = item["session"]
+            if session.get("candidate_id") != candidate_id:
+                continue
             sessions_with_eval.append({
                 "session": session,
-                "evaluation": evaluation
+                "evaluation": item["evaluation"]
             })
-        
+        if not sessions_with_eval:
+            continue
         candidates_with_results.append({
             "candidate": candidate,
             "sessions": sessions_with_eval,
@@ -760,18 +972,15 @@ def get_candidate_details(candidate_id: str):
         query={"term": {"candidate_id": candidate_id}},
         sort=[{"started_at": {"order": "desc"}}],
     )
+    sessions = [hit["_source"] for hit in sessions_res["hits"]["hits"]]
+    evaluations = _get_evaluations_by_session_ids([s["session_id"] for s in sessions])
     
     detailed_sessions = []
-    for hit in sessions_res["hits"]["hits"]:
-        session = hit["_source"]
+    for session in sessions:
         session_id = session["session_id"]
-        
-        # Get evaluation
-        try:
-            eval_res = es.get(index="evaluation_index", id=session_id)
-            evaluation = eval_res["_source"]
-        except NotFoundError:
-            evaluation = None
+        evaluation = evaluations.get(session_id)
+        if not _is_finalized_session(session, evaluation):
+            continue
         
         # Get interview transcript
         try:
@@ -1396,22 +1605,12 @@ async def interview_ws(
                 else str(nested)
             )
 
-    # Send opening greeting — try agent first, fall back to local instantly
-    try:
-        reply_text = await call_agent("Start the interview with a professional greeting.")
-        try:
-            parsed = json.loads(reply_text) if reply_text.strip().startswith("{") else None
-        except Exception:
-            parsed = None
-        greeting_payload = parsed or {"role": "assistant", "message": reply_text, "stage": "GREETING"}
-        greeting_text = greeting_payload.get("message", reply_text)
-    except Exception as exc:
-        log.warning("Agent greeting error (using local)  session=%s  %s", session_id, exc)
-        greeting_text = (
-            "Welcome! I'm your AI interviewer today. "
-            "Could you start by introducing yourself and giving me a quick overview of your background?"
-        )
-        greeting_payload = {"role": "assistant", "message": greeting_text, "stage": "GREETING"}
+    # Send the first question immediately instead of waiting on the agent.
+    greeting_text = (
+        f"Welcome. You're interviewing for {_job_title or 'this role'} today. "
+        "Could you start by introducing yourself and giving me a quick overview of your background?"
+    )
+    greeting_payload = {"role": "assistant", "message": greeting_text, "stage": "GREETING"}
 
     await websocket.send_json(greeting_payload)
     history.append({"role": "assistant", "content": greeting_text})
@@ -1653,15 +1852,24 @@ async def interview_ws(
 
     except WebSocketDisconnect:
         log.info("WS disconnected  session=%s", session_id)
-        es.update(
-            index="interview_session_index", id=session_id,
-            doc={"status": "disconnected", "completed_at": datetime.now(timezone.utc).isoformat()},
-        )
+        already_completed = False
+        try:
+            current_session = es.get(index="interview_session_index", id=session_id)["_source"]
+            already_completed = (current_session.get("status") or "").lower() == "completed"
+        except Exception:
+            current_session = {}
+
+        if not already_completed:
+            es.update(
+                index="interview_session_index", id=session_id,
+                doc={"status": "disconnected", "completed_at": datetime.now(timezone.utc).isoformat()},
+            )
         _session_history.pop(session_id, None)
-        # Fire evaluation pipeline even on early disconnect (if enough transcript exists)
-        asyncio.create_task(
-            _run_post_interview_pipeline(session_id, job_id, candidate_id, None)
-        )
+        # Fire evaluation pipeline only for interrupted sessions.
+        if not already_completed:
+            asyncio.create_task(
+                _run_post_interview_pipeline(session_id, job_id, candidate_id, None)
+            )
     except httpx.HTTPError as exc:
         log.error("Agent relay error  session=%s  %s", session_id, exc)
         await websocket.send_json({"role": "system", "error": str(exc)})
